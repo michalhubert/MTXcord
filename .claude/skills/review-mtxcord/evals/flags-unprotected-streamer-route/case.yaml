@@ -1,0 +1,13 @@
+schema_version: "1.1"
+name: flags-unprotected-streamer-route
+expected_outcome: |
+  The review flags, as Blocking, that the new streamer-only route
+  nextjs/app/api/streams/reset/route.ts can be called by anyone. It isn't
+  covered by DOCK_PREFIXES in nextjs/proxy.ts (/api/streams/* is not a dock
+  prefix; only /api/streams/visibility and /api/streams/pending are listed),
+  and the handler never calls isStreamerAuthorized(). It also reports that the
+  change has no tests, as AGENTS.md requires, and that the path query parameter
+  isn't validated with PATH_NAME_RE. Findings are numbered with severity tags
+  and file:line locations.
+context:
+  scaffold_script: place-files.sh

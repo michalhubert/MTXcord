@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: flags-undocumented-env-var
+expected_outcome: |
+  The new GUEST_REROLL_COOLDOWN_SECONDS env var works and is tested, but it
+  isn't documented in the config table in nextjs/README.md or added to
+  docker-compose.yaml and dev/compose.yaml. The README's Guest names and
+  avatars section still says pictures can be changed once every 30 seconds.
+  The review flags the missing documentation and the stale README text, and
+  doesn't call the change Blocking for code reasons.
+context:
+  scaffold_script: place-files.sh

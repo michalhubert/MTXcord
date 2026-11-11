@@ -1,0 +1,13 @@
+schema_version: "1.1"
+name: flags-fix-without-regression-test
+expected_outcome: |
+  The change adds AbortSignal.timeout(5000) to both Discord webhook fetches in
+  nextjs/lib/discordWebhook.ts, which is a reasonable fix, but it comes without
+  a regression test. The review must say it isn't ready to commit: the bug fix
+  needs a regression test (per AGENTS.md) that fails without the timeout, e.g.
+  in tests/unit/lib/discordWebhook.test.ts with a webhook that never answers.
+  The review shouldn't claim the timeout itself is wrong. It may also note that
+  a timed-out PATCH now drops the stored message id and posts a duplicate
+  message.
+context:
+  scaffold_script: place-files.sh

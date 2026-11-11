@@ -1,0 +1,29 @@
+diff --git a/nextjs/lib/discordWebhook.ts b/nextjs/lib/discordWebhook.ts
+index fbe748f..c316331 100644
+--- a/nextjs/lib/discordWebhook.ts
++++ b/nextjs/lib/discordWebhook.ts
+@@ -45,12 +45,16 @@ function buildEmbed(path: string, online: boolean) {
+   };
+ }
+ 
++// A slow Discord would otherwise hold up the stream hook (and MediaMTX) indefinitely.
++const WEBHOOK_TIMEOUT_MS = 5000;
++
+ async function postNewMessage(webhookUrl: string, embed: unknown): Promise<string | null> {
+   try {
+     const res = await fetch(`${webhookUrl}?wait=true`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ embeds: [embed] }),
++      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
+     });
+     if (!res.ok) {
+       console.error("Discord webhook POST failed:", res.status, await res.text().catch(() => ""));
+@@ -70,6 +74,7 @@ async function editMessage(webhookUrl: string, messageId: string, embed: unknown
+       method: "PATCH",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ embeds: [embed] }),
++      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
+     });
+     return res.ok;
+   } catch (err) {

@@ -1,0 +1,33 @@
+diff --git a/nextjs/lib/guestIdentity.ts b/nextjs/lib/guestIdentity.ts
+index 6048047..cad5430 100644
+--- a/nextjs/lib/guestIdentity.ts
++++ b/nextjs/lib/guestIdentity.ts
+@@ -57,7 +57,8 @@ function loadPonyNames(): readonly PonyName[] {
+         if (!text || text.startsWith('#')) return []
+         const [rawName, rawTag] = text.split('|', 2)
+         const name = rawName.trim()
+-        const tag = cleanTag(rawTag ?? name)
++        // "Name |" (nothing after the bar) also falls back to the name.
++        const tag = cleanTag(rawTag?.trim() || name)
+         return name && tag ? [[name, tag]] : []
+       })
+     if (names.length > 0) return names
+diff --git a/nextjs/tests/unit/lib/guestIdentity.test.ts b/nextjs/tests/unit/lib/guestIdentity.test.ts
+index 4ed8e02..2f1adc7 100644
+--- a/nextjs/tests/unit/lib/guestIdentity.test.ts
++++ b/nextjs/tests/unit/lib/guestIdentity.test.ts
+@@ -370,6 +370,14 @@ describe('custom pony names file', () => {
+     expect(queryOf(booru.requests[0])).toMatch(/^"only pony", solo/)
+   })
+ 
++  it('defaults the tag to the name when nothing follows the bar', async () => {
++    const file = namesFile('Trailing Pipe |\n')
++    const booru = useFakeDerpibooru()
++    const mod = await load(file)
++    expect((await mod.guestIdentity('live', IP)).name).toBe('Trailing Pipe')
++    expect(queryOf(booru.requests[0])).toMatch(/^"trailing pipe", solo/)
++  })
++
+   it('falls back to the built-in list for an unreadable file', async () => {
+     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+     useFakeDerpibooru()

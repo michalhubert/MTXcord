@@ -1,0 +1,187 @@
+diff --git a/nextjs/app/api/watch/[path]/keep/route.ts b/nextjs/app/api/watch/[path]/keep/route.ts
+index cc1e174..ea829f5 100644
+--- a/nextjs/app/api/watch/[path]/keep/route.ts
++++ b/nextjs/app/api/watch/[path]/keep/route.ts
+@@ -1,4 +1,4 @@
+-import { setGuestKeep } from '@/lib/guestIdentity'
++import { claimKeepToggle, setGuestKeep } from '@/lib/guestIdentity'
+ import { authorizeGuest } from '@/lib/watchAccess'
+ import { NextRequest } from 'next/server'
+ 
+@@ -16,6 +16,9 @@ export async function POST(
+     return new Response('Expected { keep: boolean }', { status: 400 })
+   }
+ 
++  const retryInMs = claimKeepToggle(path, ponyKey)
++  if (retryInMs > 0) return Response.json({ retryInMs }, { status: 429 })
++
+   const identity = setGuestKeep(path, ponyKey, body.keep)
+   return Response.json({ kept: identity.kept })
+ }
+diff --git a/nextjs/lib/guestIdentity.ts b/nextjs/lib/guestIdentity.ts
+index 6048047..b1ebc05 100644
+--- a/nextjs/lib/guestIdentity.ts
++++ b/nextjs/lib/guestIdentity.ts
+@@ -34,6 +34,8 @@ const FALLBACK_TAG = 'pony'
+ const AVATAR_WAIT_MS = 2000
+ // Between a guest's own rerolls (favorite tag changes count too); the streamer isn't limited.
+ export const GUEST_REROLL_COOLDOWN_MS = 30 * 1000
++// Between a guest's keep/release toggles, so the button can't be spammed.
++export const KEEP_TOGGLE_COOLDOWN_MS = 5000
+ const FAVORITE_TAG_MAX_LENGTH = 60
+ 
+ type PonyName = readonly [name: string, tag: string]
+@@ -118,6 +120,8 @@ const inflight = (store.__guestAvatarRequests ??= new Map())
+ const avatarPicks = (store.__guestAvatarPicks ??= new Map())
+ // Keyed by identityKey(): when a guest last rerolled, for the cooldown.
+ const rerolledAt = (store.__guestRerolledAt ??= new Map())
++// Keyed by identityKey(): when a guest last toggled "keep".
++const keepToggledAt = new Map<string, number>()
+ 
+ async function waitForRequestSlot(): Promise<void> {
+   const now = Date.now()
+@@ -365,6 +369,18 @@ export function cachedGuestIdentity(path: string, key: string): GuestIdentity {
+   return toIdentity(row, image)
+ }
+ 
++// Starts the cooldown if it's over, and returns 0; otherwise the remaining ms.
++export function claimKeepToggle(path: string, key: string): number {
++  const id = identityKey(path, key)
++  const now = Date.now()
++  const at = keepToggledAt.get(id)
++  if (at !== undefined && now - at < KEEP_TOGGLE_COOLDOWN_MS) {
++    return at + KEEP_TOGGLE_COOLDOWN_MS - now
++  }
++  keepToggledAt.set(id, now)
++  return 0
++}
++
+ // Kept identities survive future streams; releasing keeps it for the current one.
+ export function setGuestKeep(
+   path: string,
+diff --git a/nextjs/tests/integration/watch-guest.test.ts b/nextjs/tests/integration/watch-guest.test.ts
+index 11a7eb4..9947391 100644
+--- a/nextjs/tests/integration/watch-guest.test.ts
++++ b/nextjs/tests/integration/watch-guest.test.ts
+@@ -109,22 +109,66 @@ describe('POST /api/watch/[path]/keep', () => {
+   })
+ 
+   it('releases it again with {keep: false}', async () => {
+-    publicGuest()
++    useFakeClock()
++    publicGuest('release')
+     useFakeDerpibooru()
+-    await keep({ keep: true })
++    await keep({ keep: true }, 'release')
++    await vi.advanceTimersByTimeAsync(5001)
+ 
+-    const res = await keep({ keep: false })
++    const res = await keep({ keep: false }, 'release')
+ 
+     expect(await res.json()).toEqual({ kept: false })
+-    expect(getGuestIdentity('cam', GUEST_IP)?.keep).toBe(0)
++    expect(getGuestIdentity('release', GUEST_IP)?.keep).toBe(0)
+   })
+ 
+   it('is per guest address', async () => {
+-    publicGuest()
++    publicGuest('perip')
++    useFakeDerpibooru()
++    await keep({ keep: true }, 'perip', GUEST_IP)
++
++    expect(getGuestIdentity('perip', OTHER_IP)?.keep).toBeFalsy()
++  })
++
++  it('429 with retryInMs for a second toggle within 5 seconds', async () => {
++    publicGuest('toggle')
++    useFakeDerpibooru()
++    await keep({ keep: true }, 'toggle')
++
++    const res = await keep({ keep: false }, 'toggle')
++
++    expect(res.status).toBe(429)
++    const { retryInMs } = await res.json()
++    expect(retryInMs).toBeGreaterThan(0)
++    expect(retryInMs).toBeLessThanOrEqual(5000)
++    expect(getGuestIdentity('toggle', GUEST_IP)?.keep).toBe(1)
++  })
++
++  it('allows another toggle after the cooldown', async () => {
++    useFakeClock()
++    publicGuest('cooldown')
++    useFakeDerpibooru()
++    expect((await keep({ keep: true }, 'cooldown')).status).toBe(200)
++    expect((await keep({ keep: false }, 'cooldown')).status).toBe(429)
++
++    await vi.advanceTimersByTimeAsync(5001)
++
++    expect((await keep({ keep: false }, 'cooldown')).status).toBe(200)
++    expect(getGuestIdentity('cooldown', GUEST_IP)?.keep).toBe(0)
++  })
++
++  it('has a separate cooldown for each guest', async () => {
++    publicGuest('twoguests')
++    useFakeDerpibooru()
++    expect((await keep({ keep: true }, 'twoguests', GUEST_IP)).status).toBe(200)
++    expect((await keep({ keep: true }, 'twoguests', OTHER_IP)).status).toBe(200)
++  })
++
++  it('does not start the cooldown for an invalid body', async () => {
++    publicGuest('badbody')
+     useFakeDerpibooru()
+-    await keep({ keep: true }, 'cam', GUEST_IP)
++    expect((await keep({ keep: 'yes' }, 'badbody')).status).toBe(400)
+ 
+-    expect(getGuestIdentity('cam', OTHER_IP)?.keep).toBeFalsy()
++    expect((await keep({ keep: true }, 'badbody')).status).toBe(200)
+   })
+ 
+   it.each([
+diff --git a/nextjs/tests/unit/lib/guestIdentity.test.ts b/nextjs/tests/unit/lib/guestIdentity.test.ts
+index 4ed8e02..014104e 100644
+--- a/nextjs/tests/unit/lib/guestIdentity.test.ts
++++ b/nextjs/tests/unit/lib/guestIdentity.test.ts
+@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
+ import {
+   cachedGuestIdentity,
+   claimGuestReroll,
++  claimKeepToggle,
+   GUEST_REROLL_COOLDOWN_MS,
+   guestIdentity,
+   guestRerollWaitMs,
++  KEEP_TOGGLE_COOLDOWN_MS,
+   normalizeFavoriteTag,
+   ponyKeyFor,
+   ponyKeyForSession,
+@@ -118,6 +120,31 @@ describe('reroll cooldown', () => {
+   })
+ })
+ 
++describe('keep toggle cooldown', () => {
++  it('is 5 seconds', () => {
++    expect(KEEP_TOGGLE_COOLDOWN_MS).toBe(5000)
++  })
++
++  it('starts on the first claim and counts down', () => {
++    useFakeClock()
++    expect(claimKeepToggle('kt1', IP)).toBe(0)
++
++    vi.advanceTimersByTime(2000)
++    expect(claimKeepToggle('kt1', IP)).toBe(3000)
++    // A refused claim does not extend the cooldown.
++    vi.advanceTimersByTime(3000)
++    expect(claimKeepToggle('kt1', IP)).toBe(0)
++  })
++
++  it('is tracked per path and per guest', () => {
++    useFakeClock()
++    claimKeepToggle('kt2', IP)
++    expect(claimKeepToggle('kt3', IP)).toBe(0)
++    expect(claimKeepToggle('kt2', '198.51.100.2')).toBe(0)
++    expect(claimKeepToggle('kt2', IP)).toBeGreaterThan(0)
++  })
++})
++
+ describe('guest identities', () => {
+   it('picks a pony name and an avatar, and asks the booru for a matching picture', async () => {
+     const booru = useFakeDerpibooru()

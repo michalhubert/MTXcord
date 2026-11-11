@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: passes-clean-fix-with-test
+expected_outcome: |
+  A clean change, used as a control against false positives. It fixes the
+  parsing in nextjs/lib/guestIdentity.ts (cleanTag(rawTag?.trim() || name)) and
+  adds a regression test to tests/unit/lib/guestIdentity.test.ts. That test
+  passes with the fix and fails without it. The review should report no
+  Blocking findings, shouldn't claim tests are missing, and should say the
+  change is fine to push. At most it should give minor nits.
+context:
+  scaffold_script: place-files.sh
