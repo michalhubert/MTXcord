@@ -5,7 +5,7 @@ vi.mock('@/lib/auth', () => ({ auth: vi.fn() }))
 import { auth } from '@/lib/auth'
 import { kickViewer, denyViewer } from '@/lib/accessBlocks'
 import { approveAccess } from '@/lib/accessRequests'
-import { setPathVisibility, setViewerPassword } from '@/lib/db'
+import { rotateViewerPassword, setPathVisibility, setViewerPassword } from '@/lib/db'
 import type { SessionUser } from '@/lib/authz'
 import {
   authorizeGuest,
@@ -15,6 +15,7 @@ import {
 } from '@/lib/watchAccess'
 import { nextRequest } from '../../helpers/request'
 import { useFakeClock } from '../../helpers/clock'
+import { trustNetworks } from '../../helpers/trust'
 
 const mockAuth = vi.mocked(auth) as unknown as {
   mockResolvedValue(v: unknown): void
@@ -27,6 +28,14 @@ const viewer = (password = 'pw'): SessionUser => ({
   image: null,
   role: 'viewer',
   password,
+})
+const TRUSTED_IP = '10.250.0.5'
+const trusted = (): SessionUser => ({
+  id: 'viewer',
+  name: null,
+  image: null,
+  role: 'viewer',
+  trusted: true,
 })
 const discord = (id = '42'): SessionUser => ({
   id,
@@ -124,10 +133,70 @@ describe('viewerAccess', () => {
   })
 })
 
+describe('viewerAccess for trusted-network sessions', () => {
+  beforeEach(() => {
+    trustNetworks('10.250.0.0/16')
+  })
+
+  it('lets them onto a public stream without any password', () => {
+    setViewerPassword('live', 'rotated-since')
+    setPathVisibility('live', 'public')
+    expect(viewerAccess(trusted(), 'live', TRUSTED_IP)).toEqual({ status: 'ok' })
+  })
+
+  it('is not made stale by a password rotation', () => {
+    setPathVisibility('live', 'public')
+    rotateViewerPassword('default')
+    rotateViewerPassword('live')
+    expect(viewerAccess(trusted(), 'live', TRUSTED_IP).status).toBe('ok')
+  })
+
+  it('is unauthorized from an IP outside the trusted networks', () => {
+    setPathVisibility('live', 'public')
+    expect(viewerAccess(trusted(), 'live', IP)).toEqual({ status: 'unauthorized' })
+    expect(viewerAccess(trusted(), 'live', 'unknown')).toEqual({ status: 'unauthorized' })
+  })
+
+  it('is unauthorized once TRUSTED_NETWORKS no longer covers the IP', () => {
+    setPathVisibility('live', 'public')
+    vi.stubEnv('TRUSTED_NETWORKS', '')
+    expect(viewerAccess(trusted(), 'live', TRUSTED_IP)).toEqual({ status: 'unauthorized' })
+  })
+
+  it('makes them wait on a private stream until approved by IP', () => {
+    expect(viewerAccess(trusted(), 'live', TRUSTED_IP)).toEqual({ status: 'pending' })
+    approveAccess('live', TRUSTED_IP, 'viewer')
+    expect(viewerAccess(trusted(), 'live', TRUSTED_IP).status).toBe('ok')
+    expect(viewerAccess(trusted(), 'live', '10.250.0.6').status).toBe('pending')
+  })
+
+  it('blocks kicked and denied ones like any guest', () => {
+    useFakeClock()
+    setPathVisibility('live', 'public')
+    kickViewer('live', { role: 'viewer', ip: TRUSTED_IP })
+    expect(viewerAccess(trusted(), 'live', TRUSTED_IP)).toMatchObject({
+      status: 'blocked',
+      reason: 'kicked',
+    })
+    denyViewer('live', { role: 'viewer', ip: '10.250.0.9' })
+    expect(viewerAccess(trusted(), 'live', '10.250.0.9')).toMatchObject({
+      status: 'blocked',
+      reason: 'denied',
+    })
+  })
+
+  it('does not affect password sessions on a trusted IP', () => {
+    setPathVisibility('live', 'public')
+    expect(viewerAccess(viewer(), 'live', TRUSTED_IP).status).toBe('ok')
+    expect(viewerAccess(viewer('old'), 'live', TRUSTED_IP).status).toBe('unauthorized')
+  })
+})
+
 describe('watchAccessDenied', () => {
   it('maps statuses to HTTP codes', () => {
     expect(watchAccessDenied(streamer, 'live', IP)).toBeNull()
     expect(watchAccessDenied(viewer('old'), 'live', IP)).toBe(401)
+    expect(watchAccessDenied(trusted(), 'live', IP)).toBe(401) // trusted session off its network
     expect(watchAccessDenied(viewer(), 'live', IP)).toBe(403) // pending
     kickViewer('live', { role: 'viewer', ip: IP })
     expect(watchAccessDenied(viewer(), 'live', IP)).toBe(403) // blocked

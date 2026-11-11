@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setViewerPassword } from '@/lib/db'
 import { config } from '@/lib/auth'
 import { resetServerState } from '../../helpers/state'
+import { trustNetworks } from '../../helpers/trust'
 
 type Authorize = (
   credentials: Record<string, unknown>,
@@ -73,6 +74,41 @@ describe('viewer-password provider', () => {
   })
 })
 
+describe('trusted-network provider', () => {
+  const authorize: Authorize = (c, r) => providerById('trusted-network').options.authorize(c, r)
+
+  it('signs in a client on a trusted network as a flagged viewer', async () => {
+    trustNetworks('192.168.1.0/24, fd00::/8')
+    const expected = { id: 'viewer', name: 'Viewer', role: 'viewer', trusted: true }
+    expect(await authorize({}, request('192.168.1.20'))).toEqual(expected)
+    expect(await authorize({}, request('fd00::7'))).toEqual(expected)
+    expect(await authorize({}, request('::ffff:192.168.1.20'))).toEqual(expected)
+  })
+
+  it('does not carry a password', async () => {
+    trustNetworks('192.168.1.0/24')
+    expect(await authorize({ password: 'x' }, request('192.168.1.20'))).not.toHaveProperty('password')
+  })
+
+  it('rejects clients outside the trusted networks', async () => {
+    trustNetworks('192.168.1.0/24')
+    expect(await authorize({}, request('192.168.2.20'))).toBeNull()
+    expect(await authorize({}, request('203.0.113.10'))).toBeNull()
+  })
+
+  it('rejects everyone when TRUSTED_NETWORKS is unset or empty', async () => {
+    expect(await authorize({}, request('192.168.1.20'))).toBeNull()
+    vi.stubEnv('TRUSTED_NETWORKS', '')
+    expect(await authorize({}, request('192.168.1.20'))).toBeNull()
+  })
+
+  it('rejects a request with no client IP, even for a catch-all network', async () => {
+    trustNetworks('0.0.0.0/0, ::/0')
+    const noIp = new Request('http://localhost/api/auth/callback/credentials', { method: 'POST' })
+    expect(await authorize({}, noIp)).toBeNull()
+  })
+})
+
 describe('streamer-password provider', () => {
   const authorize: Authorize = (c, r) => providerById('streamer-password').options.authorize(c, r)
 
@@ -134,6 +170,25 @@ describe('callbacks', () => {
     expect(token).toMatchObject({ role: 'viewer', password: 'pw' })
   })
 
+  it('stores the trusted flag in the token, and keeps the viewer role', async () => {
+    const token = await jwt({
+      token: { sub: 'viewer' },
+      user: { id: 'viewer', role: 'viewer', trusted: true },
+    })
+    expect(token).toMatchObject({ role: 'viewer', trusted: true })
+    expect(token).not.toHaveProperty('password')
+  })
+
+  it('keeps the trusted flag on later refreshes', async () => {
+    const token = await jwt({ token: { sub: 'viewer', role: 'viewer', trusted: true } })
+    expect(token).toMatchObject({ trusted: true })
+  })
+
+  it('leaves the trusted flag out for password viewers', async () => {
+    const token = await jwt({ token: {}, user: { role: 'viewer', password: 'pw' } })
+    expect(token).not.toHaveProperty('trusted')
+  })
+
   it('leaves the password out for other users', async () => {
     const token = await jwt({ token: {}, user: { role: 'streamer' } })
     expect(token).toMatchObject({ role: 'streamer' })
@@ -160,6 +215,28 @@ describe('callbacks', () => {
   })
 })
 
+describe('session callback (trusted)', () => {
+  const session = config.callbacks!.session as unknown as (
+    params: Record<string, unknown>,
+  ) => Promise<{ user: Record<string, unknown> }>
+
+  it('exposes the trusted flag on the session user', async () => {
+    const result = await session({
+      session: { user: {}, expires: 'later' },
+      token: { role: 'viewer', sub: 'viewer', trusted: true },
+    })
+    expect(result.user).toMatchObject({ role: 'viewer', id: 'viewer', trusted: true })
+  })
+
+  it('does not set it for tokens without it', async () => {
+    const result = await session({
+      session: { user: {}, expires: 'later' },
+      token: { role: 'viewer', sub: 'viewer', password: 'pw' },
+    })
+    expect(result.user.trusted).toBeUndefined()
+  })
+})
+
 describe('Discord provider', () => {
   afterEach(() => vi.resetModules())
 
@@ -176,7 +253,7 @@ describe('Discord provider', () => {
     )
 
   it('is absent without credentials', () => {
-    expect(ids(config)).toEqual(['viewer-password', 'streamer-password'])
+    expect(ids(config)).toEqual(['viewer-password', 'trusted-network', 'streamer-password'])
   })
 
   it('is absent when only one of id and secret is set', async () => {
@@ -188,6 +265,7 @@ describe('Discord provider', () => {
     expect(ids(await load('abc', 'def'))).toEqual([
       'discord',
       'viewer-password',
+      'trusted-network',
       'streamer-password',
     ])
   })

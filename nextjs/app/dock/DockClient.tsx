@@ -83,7 +83,6 @@ export default function DockClient({ embedded = false }: { embedded?: boolean })
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [logsOpen, setLogsOpen] = useState(false)
   const [confirmPrivatePath, setConfirmPrivatePath] = useState<string | null>(null)
-  const [pendingQuery, setPendingQuery] = useState('')
   const [viewerQuery, setViewerQuery] = useState('')
   // A double-clicked deny would escalate the block.
   const [busy, setBusy] = useState<string | null>(null)
@@ -221,12 +220,15 @@ export default function DockClient({ embedded = false }: { embedded?: boolean })
   const pendingRequests = allPending.filter((r) => onCurrentPath(r.path))
   const readers = allReaders.filter((r) => onCurrentPath(r.path))
   const visibleEvents = events.filter((e) => onCurrentPath(e.path))
-  const filteredPending = pendingRequests.filter((r) =>
-    matchesQuery(pendingQuery, r.name, r.clientIp),
-  )
-  const filteredReaders = readers.filter((r) =>
-    matchesQuery(viewerQuery, r.name, r.discordName, r.ip),
-  )
+  // Pending requests always come first, then connected viewers.
+  const rows: DockRow[] = [
+    ...pendingRequests
+      .filter((r) => matchesQuery(viewerQuery, r.name, r.clientIp))
+      .map((req): DockRow => ({ kind: 'pending', req })),
+    ...readers
+      .filter((r) => matchesQuery(viewerQuery, r.name, r.discordName, r.ip))
+      .map((viewer): DockRow => ({ kind: 'viewer', viewer })),
+  ]
   const viewerPassword = currentPath ? (snapshot?.viewerPasswords[currentPath] ?? null) : null
   const isPublic = !!currentPath && visibilities[currentPath] === 'public'
   const watchingCount = (path: string) => allReaders.filter((r) => r.path === path).length
@@ -494,151 +496,47 @@ export default function DockClient({ embedded = false }: { embedded?: boolean })
       </List>
 
       <SectionHeader
-        title="Pending Requests"
+        title="Viewers"
         extra={
-          pendingRequests.length > 0 && (
-            <Box component="span" sx={{ fontSize: 10, fontWeight: 700, color: 'warning.light' }}>
-              {pendingRequests.length}
-            </Box>
-          )
-        }
-      />
-      <SearchField value={pendingQuery} onChange={setPendingQuery} />
-      <VirtualList
-        items={filteredPending}
-        getKey={requestKeyOf}
-        empty={pendingQuery ? 'No matching requests' : 'No pending requests'}
-        renderItem={(req) => {
-          const requestKey = requestKeyOf(req)
-          return (
-            <Row as="div">
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
-                <SmallAvatar image={req.image} fallback={req.name || req.clientIp || 'Guest'} />
-                <Box sx={{ minWidth: 0 }}>
-                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-                    <Typography noWrap sx={{ fontSize: 12, fontWeight: 600, color: 'primary.light' }}>
-                      {req.name ?? req.clientIp ?? 'Guest'}
-                    </Typography>
-                    {req.role === 'discord' && <DiscordIcon />}
-                  </Stack>
-                  <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
-                    {req.name && req.clientIp && <>{req.clientIp} · </>}
-                    wants to join <strong>/{req.path}</strong>
-                  </Typography>
-                </Box>
-              </Stack>
-              <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
-                <Button
-                  size="small"
-                  onClick={() => respondToRequest(req, 'approve')}
-                  disabled={busy === `request:${requestKey}`}
-                  sx={tintedButtonSx('success')}
-                >
-                  Approve
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => respondToRequest(req, 'deny')}
-                  disabled={busy === `request:${requestKey}`}
-                  sx={tintedButtonSx('error')}
-                >
-                  Deny
-                </Button>
-              </Stack>
-            </Row>
-          )
-        }}
-      />
-
-      <SectionHeader
-        title="Current Viewers"
-        extra={
-          readers.length > 0 && (
-            <Box component="span" sx={{ fontSize: 10, fontWeight: 700, color: 'success.main' }}>
-              {readers.length}
-            </Box>
-          )
+          <Stack direction="row" spacing={1}>
+            {readers.length > 0 && (
+              <Box component="span" sx={{ fontSize: 10, fontWeight: 700, color: 'success.main' }}>
+                {readers.length}
+              </Box>
+            )}
+            {pendingRequests.length > 0 && (
+              <Box component="span" sx={{ fontSize: 10, fontWeight: 700, color: 'warning.light' }}>
+                {pendingRequests.length} pending
+              </Box>
+            )}
+          </Stack>
         }
       />
       <SearchField value={viewerQuery} onChange={setViewerQuery} />
       <VirtualList
-        items={filteredReaders}
-        getKey={(r) => r.id}
-        empty={viewerQuery ? 'No matching viewers' : 'No viewers connected'}
+        items={rows}
+        getKey={(row) =>
+          row.kind === 'pending' ? `pending:${requestKeyOf(row.req)}` : `viewer:${row.viewer.id}`
+        }
+        empty={viewerQuery ? 'No matching viewers or requests' : 'No viewers connected'}
         last
-        renderItem={(r) => (
-          <Row as="div">
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
-              {r.image ? (
-                <AvatarPreview
-                  image={r.image}
-                  name={viewerLabel(r)}
-                  sx={{ display: 'flex', flexShrink: 0, cursor: 'zoom-in' }}
-                >
-                  <SmallAvatar image={r.image} fallback="G" />
-                </AvatarPreview>
-              ) : (
-                <SmallAvatar image={null} fallback={r.name || 'G'} />
-              )}
-              <Box sx={{ minWidth: 0 }}>
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-                  <Typography noWrap sx={{ fontSize: 12, fontWeight: 600, color: 'primary.light' }}>
-                    {viewerLabel(r)}
-                  </Typography>
-                  {r.role === 'discord' && !r.hasPony && <DiscordIcon />}
-                </Stack>
-                {r.discordName && (
-                  <Stack
-                    direction="row"
-                    spacing={0.5}
-                    sx={{ alignItems: 'center', fontSize: 10, color: 'discord.light' }}
-                  >
-                    {r.discordImage && (
-                      <Avatar
-                        src={r.discordImage}
-                        alt=""
-                        slotProps={{ img: { referrerPolicy: 'no-referrer' } }}
-                        sx={{ width: 12, height: 12 }}
-                      />
-                    )}
-                    <span>{r.discordName}</span>
-                    <DiscordIcon size={10} />
-                  </Stack>
-                )}
-                <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
-                  {r.ip && <>{r.ip} · </>}
-                  Path: <strong>{r.path || 'default'}</strong>
-                </Typography>
-              </Box>
-            </Stack>
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
-              {r.hasPony && (
-                <IconButton
-                  size="small"
-                  onClick={() => rerollAvatar(r.id)}
-                  disabled={busy === `reroll:${r.id}`}
-                  title="Give this viewer a different pony picture"
-                  sx={tintedButtonSx('info')}
-                >
-                  {busy === `reroll:${r.id}` ? (
-                    <CircularProgress size={12} color="inherit" />
-                  ) : (
-                    <Dices size={12} />
-                  )}
-                </IconButton>
-              )}
-              <IconButton
-                size="small"
-                onClick={() => kickViewer(r)}
-                disabled={busy === `kick:${r.id}`}
-                title="Kick this viewer"
-                sx={tintedButtonSx('error')}
-              >
-                <X size={12} />
-              </IconButton>
-            </Stack>
-          </Row>
-        )}
+        renderItem={(row) =>
+          row.kind === 'pending' ? (
+            <PendingRow
+              req={row.req}
+              busy={busy === `request:${requestKeyOf(row.req)}`}
+              onRespond={(action) => respondToRequest(row.req, action)}
+            />
+          ) : (
+            <ViewerRow
+              viewer={row.viewer}
+              rerolling={busy === `reroll:${row.viewer.id}`}
+              kicking={busy === `kick:${row.viewer.id}`}
+              onReroll={() => rerollAvatar(row.viewer.id)}
+              onKick={() => kickViewer(row.viewer)}
+            />
+          )
+        }
       />
 
       <Dialog
@@ -886,12 +784,154 @@ function List({
   )
 }
 
+type DockRow =
+  | { kind: 'pending'; req: PendingRequest }
+  | { kind: 'viewer'; viewer: DockViewer }
+
+function PendingRow({
+  req,
+  busy,
+  onRespond,
+}: {
+  req: PendingRequest
+  busy: boolean
+  onRespond: (action: 'approve' | 'deny') => void
+}) {
+  return (
+    <Row as="div" pending>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+        <SmallAvatar image={req.image} fallback={req.name || req.clientIp || 'Guest'} />
+        <Box sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+            <Typography noWrap sx={{ fontSize: 12, fontWeight: 600, color: 'primary.light' }}>
+              {req.name ?? req.clientIp ?? 'Guest'}
+            </Typography>
+            {req.role === 'discord' && <DiscordIcon />}
+          </Stack>
+          <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
+            {req.name && req.clientIp && <>{req.clientIp} · </>}
+            wants to join <strong>/{req.path}</strong>
+          </Typography>
+        </Box>
+      </Stack>
+      <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+        <Button
+          size="small"
+          onClick={() => onRespond('approve')}
+          disabled={busy}
+          sx={tintedButtonSx('success')}
+        >
+          Approve
+        </Button>
+        <Button
+          size="small"
+          onClick={() => onRespond('deny')}
+          disabled={busy}
+          sx={tintedButtonSx('error')}
+        >
+          Deny
+        </Button>
+      </Stack>
+    </Row>
+  )
+}
+
+function ViewerRow({
+  viewer,
+  rerolling,
+  kicking,
+  onReroll,
+  onKick,
+}: {
+  viewer: DockViewer
+  rerolling: boolean
+  kicking: boolean
+  onReroll: () => void
+  onKick: () => void
+}) {
+  return (
+    <Row as="div">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+        {viewer.image ? (
+          <AvatarPreview
+            image={viewer.image}
+            name={viewerLabel(viewer)}
+            sx={{ display: 'flex', flexShrink: 0, cursor: 'zoom-in' }}
+          >
+            <SmallAvatar image={viewer.image} fallback="G" />
+          </AvatarPreview>
+        ) : (
+          <SmallAvatar image={null} fallback={viewer.name || 'G'} />
+        )}
+        <Box sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+            <Typography noWrap sx={{ fontSize: 12, fontWeight: 600, color: 'primary.light' }}>
+              {viewerLabel(viewer)}
+            </Typography>
+            {viewer.role === 'discord' && !viewer.hasPony && <DiscordIcon />}
+          </Stack>
+          {viewer.discordName && (
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{ alignItems: 'center', fontSize: 10, color: 'discord.light' }}
+            >
+              {viewer.discordImage && (
+                <Avatar
+                  src={viewer.discordImage}
+                  alt=""
+                  slotProps={{ img: { referrerPolicy: 'no-referrer' } }}
+                  sx={{ width: 12, height: 12 }}
+                />
+              )}
+              <span>{viewer.discordName}</span>
+              <DiscordIcon size={10} />
+            </Stack>
+          )}
+          <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
+            {viewer.ip && <>{viewer.ip} · </>}
+            Path: <strong>{viewer.path || 'default'}</strong>
+          </Typography>
+        </Box>
+      </Stack>
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
+        {viewer.hasPony && (
+          <IconButton
+            size="small"
+            onClick={onReroll}
+            disabled={rerolling}
+            title="Give this viewer a different pony picture"
+            sx={tintedButtonSx('info')}
+          >
+            {rerolling ? (
+              <CircularProgress size={12} color="inherit" />
+            ) : (
+              <Dices size={12} />
+            )}
+          </IconButton>
+        )}
+        <IconButton
+          size="small"
+          onClick={onKick}
+          disabled={kicking}
+          title="Kick this viewer"
+          sx={tintedButtonSx('error')}
+        >
+          <X size={12} />
+        </IconButton>
+      </Stack>
+    </Row>
+  )
+}
+
 function Row({
   dense,
+  pending,
   as = 'li',
   children,
 }: {
   dense?: boolean
+  pending?: boolean
   as?: 'li' | 'div'
   children: ReactNode
 }) {
@@ -909,6 +949,7 @@ function Row({
         justifyContent: 'space-between',
         gap: 1,
         fontSize: dense ? 11 : 12,
+        ...(pending && { borderLeft: 3, borderLeftColor: 'warning.main' }),
       }}
     >
       {children}

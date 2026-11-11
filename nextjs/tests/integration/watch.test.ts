@@ -17,7 +17,8 @@ import type { WatchEvent } from '@/lib/watchRoomShared'
 import { useFakeClock } from '../helpers/clock'
 import { useFakeDerpibooru, useFakeMediamtx } from '../helpers/msw'
 import { nextRequest, routeParams } from '../helpers/request'
-import { asDiscord, asGuest, asStreamer, signedOut } from '../helpers/session'
+import { asDiscord, asGuest, asStreamer, asTrusted, signedOut } from '../helpers/session'
+import { trustNetworks } from '../helpers/trust'
 import { GUEST_IP, OTHER_IP, goLive, openStream } from './_support'
 
 type StateEvent = Extract<WatchEvent, { type: 'state' }>
@@ -363,6 +364,76 @@ describe('GET /api/watch/[path] (SSE)', () => {
       expect(sse.events.find(isState)?.access).toEqual({ status: 'ok' })
       expect(listPendingRequests()).toEqual([])
     })
+  })
+})
+
+describe('trusted-network viewers', () => {
+  const TRUSTED_IP = '10.250.0.5'
+  const trustedNetworks = () => trustNetworks('10.250.0.0/16')
+
+  it('join a public live path from a trusted IP without any password', async () => {
+    useFakeDerpibooru()
+    const fake = useFakeMediamtx()
+    fake.setReady('cam', true)
+    setPathVisibility('cam', 'public')
+    trustedNetworks()
+    asTrusted()
+
+    const { sse } = await connect('cam', { ip: TRUSTED_IP })
+    await sse.waitFor((e) => e.type === 'presence')
+
+    expect(sse.events.find(isState)?.access).toEqual({ status: 'ok' })
+    const hello = sse.events.find((e) => e.type === 'hello') as Extract<
+      WatchEvent,
+      { type: 'hello' }
+    >
+    expect(hello.self.role).toBe('viewer')
+    expect(hello.self.name).toEqual(expect.any(String))
+  })
+
+  it('wait on a private path, filing a request keyed by IP, until approved', async () => {
+    const fake = useFakeMediamtx()
+    fake.setReady('cam', true)
+    trustedNetworks()
+    asTrusted()
+
+    const { sse } = await connect('cam', { gate: true, ip: TRUSTED_IP })
+    await sse.waitFor(stateWith('pending'))
+    expect(listPendingRequests()).toMatchObject([
+      { path: 'cam', ip: TRUSTED_IP, role: 'viewer' },
+    ])
+
+    approveAccess('cam', TRUSTED_IP, 'viewer')
+    await sse.waitFor(stateWith('ok'))
+    expect(listPendingRequests()).toEqual([])
+  })
+
+  it('are told their session is unauthorized from an IP outside the trusted networks', async () => {
+    useFakeMediamtx()
+    setPathVisibility('cam', 'public')
+    trustedNetworks()
+    asTrusted()
+
+    const { sse } = await connect('cam', { ip: GUEST_IP })
+    await sse.waitFor(isState)
+
+    expect(sse.events.find(isState)?.access).toEqual({ status: 'unauthorized' })
+  })
+
+  it('cannot react from outside the trusted networks (401), but can from inside', async () => {
+    useFakeDerpibooru()
+    useFakeMediamtx()
+    setPathVisibility('cam', 'public')
+    trustedNetworks()
+    asTrusted()
+    const react = (ip: string) =>
+      reactionPost(
+        nextRequest('/api/watch/cam', { json: { emoji: '🔥' }, ip }),
+        routeParams('cam'),
+      )
+
+    expect((await react(GUEST_IP)).status).toBe(401)
+    expect((await react(TRUSTED_IP)).status).toBe(204)
   })
 })
 

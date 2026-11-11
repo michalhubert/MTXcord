@@ -15,6 +15,9 @@ export const HOOK_SECRET = 'e2e-hook-secret'
 export const NEXTAUTH_SECRET =
   'e2e-nextauth-secret-0123456789abcdef0123456789abcdef0123456789abcdef'
 
+/** Clients in this range join without the viewer password (see trustedIp() in fixtures.ts). */
+export const TRUSTED_NETWORK = '10.250.0.0/16'
+
 /** Header the app reads the client IP from (CLIENT_IP_HEADER on the server). */
 export const CLIENT_IP_HEADER = 'x-test-client-ip'
 
@@ -44,6 +47,7 @@ export function serverEnv(): Record<string, string> {
     MTXCORD_DB_PATH: DB_PATH,
     GUEST_AVATAR_BOORU_URL: `${FAKE_URL}/booru`,
     CLIENT_IP_HEADER,
+    TRUSTED_NETWORKS: TRUSTED_NETWORK,
     DENIAL_TIMEOUTS: '1',
     DISCORD_CLIENT_ID: '',
     DISCORD_CLIENT_SECRET: '',

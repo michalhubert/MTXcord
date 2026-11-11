@@ -28,7 +28,7 @@ export async function POST(
 
   const denied = watchAccessDenied(user, path, ip)
   if (denied === 401) {
-    return new Response('Viewer password changed', { status: 401 })
+    return new Response('Session no longer valid', { status: 401 })
   }
   if (denied === 403) {
     return new Response('Forbidden', { status: 403 })
@@ -70,6 +70,7 @@ export async function POST(
       role: user.role,
       ip,
       discordId: user.role === 'discord' ? user.id : null,
+      trusted: user.role === 'viewer' && !!user.trusted,
       path,
     })
     notifyChanged(path)

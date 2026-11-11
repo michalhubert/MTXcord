@@ -1,4 +1,4 @@
-import { isStreamerAuthorized } from '@/lib/authz'
+import { isStreamerAuthorized, isTrustedSessionValid } from '@/lib/authz'
 import { rotateViewerPassword } from '@/lib/db'
 import { getViewerIdentity } from '@/lib/viewerIdentities'
 import { listWebrtcSessions, kickWebrtcSession } from '@/lib/mediamtx'
@@ -13,14 +13,22 @@ export async function POST(req: NextRequest) {
   const path = req.nextUrl.searchParams.get('path') || 'default'
   const newPassword = rotateViewerPassword(path)
 
-  // Discord viewers don't use the viewer password, so they stay connected.
+  // Discord viewers and viewers signed in through TRUSTED_NETWORKS don't use the viewer
+  // password, so they stay connected. A password guest on a trusted IP is still kicked.
   clearApprovedPasswordViewers(path)
   const sessions = await listWebrtcSessions()
   await Promise.all(
     sessions
       .filter((item) => {
         const identity = getViewerIdentity(item.id)
-        return identity?.role === 'viewer' && !!identity.path && usesPasswordOf(identity.path, path)
+        // A trusted session only skips the kick while its IP is still trusted.
+        const stillTrusted = isTrustedSessionValid(identity?.trusted, identity?.ip)
+        return (
+          identity?.role === 'viewer' &&
+          !!identity.path &&
+          !stillTrusted &&
+          usesPasswordOf(identity.path, path)
+        )
       })
       .map((item) => kickWebrtcSession(item.id)),
   )

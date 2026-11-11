@@ -4,7 +4,7 @@ import { getClientIp } from "./net";
 import { getPathVisibility } from "./db";
 import { approvalKey, isApproved } from "./accessRequests";
 import { getBlock, blockedViewerOf } from "./accessBlocks";
-import { isViewerPasswordStale, type SessionUser } from "./authz";
+import { isSessionRevoked, type SessionUser } from "./authz";
 import { ponyKeyFor } from "./guestIdentity";
 import { PATH_NAME_RE } from "./streamSettings";
 
@@ -12,11 +12,11 @@ export type ViewerAccess =
   | { status: "ok" }
   | { status: "pending" }
   | { status: "blocked"; reason: "kicked" | "denied"; blockedUntil: number }
-  // The viewer password changed since sign-in.
+  // The viewer password changed since sign-in, or a trusted-network session left its network.
   | { status: "unauthorized" };
 
 export function viewerAccess(user: SessionUser, path: string, ip: string): ViewerAccess {
-  if (isViewerPasswordStale(user, path)) return { status: "unauthorized" };
+  if (isSessionRevoked(user, path, ip)) return { status: "unauthorized" };
   if (user.role === "streamer") return { status: "ok" };
   const block = getBlock(path, blockedViewerOf(user, ip));
   if (block) return { status: "blocked", ...block };

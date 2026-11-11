@@ -32,6 +32,12 @@ export function uniqueIp(): string {
   return `198.51.${100 + Math.floor(n / 250)}.${(n % 250) + 1}`
 }
 
+/** A client IP no other test uses, inside TRUSTED_NETWORK (see env.ts). */
+export function trustedIp(): string {
+  const n = counter++
+  return `10.250.${Math.floor(n / 250)}.${(n % 250) + 1}`
+}
+
 /** Matches an IP as a whole token ("198.51.100.1" must not match "198.51.100.12"). */
 export function ipPattern(ip: string): RegExp {
   return new RegExp(ip.replaceAll('.', '\\.') + '(?!\\d)')

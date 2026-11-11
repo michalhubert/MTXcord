@@ -10,6 +10,7 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { Lock, Radio, UserX } from 'lucide-react'
 import { useViewerChannel } from '@/app/hooks/useViewerChannel'
+import { withManualLogin } from '@/lib/loginUrl'
 import LoginShell from './LoginShell'
 
 type Gate =
@@ -104,7 +105,12 @@ export default function StreamGate({ path }: { path: string }) {
         size="small"
         color="inherit"
         sx={{ mt: 3, color: 'text.secondary' }}
-        onClick={() => signOut({ redirect: false }).then(() => window.location.reload())}
+        onClick={() =>
+          signOut({ redirect: false }).then(() => {
+            const { pathname, search } = window.location
+            window.location.href = withManualLogin(pathname + search)
+          })
+        }
       >
         Sign out
       </Button>

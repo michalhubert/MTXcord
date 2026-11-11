@@ -8,7 +8,8 @@ import { mediamtxWebrtcBase } from '@/lib/mediamtx'
 import { getViewerIdentity } from '@/lib/viewerIdentities'
 import { server, useFakeMediamtx } from '../helpers/msw'
 import { nextRequest, routeParams } from '../helpers/request'
-import { asDiscord, asGuest, asStreamer, signedOut } from '../helpers/session'
+import { asDiscord, asGuest, asStreamer, asTrusted, signedOut } from '../helpers/session'
+import { trustNetworks } from '../helpers/trust'
 import { GUEST_IP, OFFER, OTHER_IP, goLive, whep } from './_support'
 
 describe('POST /api/whep/[path]', () => {
@@ -44,7 +45,7 @@ describe('POST /api/whep/[path]', () => {
       const { res } = await whep('cam')
 
       expect(res.status).toBe(401)
-      expect(await res.text()).toBe('Viewer password changed')
+      expect(await res.text()).toBe('Session no longer valid')
       expect(fake.requests).toHaveLength(0)
     })
 
@@ -135,6 +136,43 @@ describe('POST /api/whep/[path]', () => {
       const { res } = await whep('cam')
 
       expect(res.status).toBe(201)
+    })
+
+    it('lets a trusted-network viewer onto a public path without a password', async () => {
+      const fake = useFakeMediamtx()
+      goLive(fake, 'cam')
+      setPathVisibility('cam', 'public')
+      trustNetworks('10.250.0.0/16')
+      asTrusted()
+
+      const { res } = await whep('cam', '10.250.0.5')
+
+      expect(res.status).toBe(201)
+      expect(fake.whepPosts()).toHaveLength(1)
+    })
+
+    it('makes a trusted-network viewer wait for approval on a private path', async () => {
+      const fake = useFakeMediamtx()
+      goLive(fake, 'cam')
+      trustNetworks('10.250.0.0/16')
+      asTrusted()
+
+      expect((await whep('cam', '10.250.0.5')).res.status).toBe(403)
+      approveAccess('cam', '10.250.0.5', 'viewer')
+      expect((await whep('cam', '10.250.0.5')).res.status).toBe(201)
+    })
+
+    it('401 for a trusted-network session used from an untrusted IP', async () => {
+      const fake = useFakeMediamtx()
+      goLive(fake, 'cam')
+      setPathVisibility('cam', 'public')
+      trustNetworks('10.250.0.0/16')
+      asTrusted()
+
+      const { res } = await whep('cam', GUEST_IP)
+
+      expect(res.status).toBe(401)
+      expect(fake.requests).toHaveLength(0)
     })
 
     it('lets an approved Discord viewer in from any address (approved by account)', async () => {

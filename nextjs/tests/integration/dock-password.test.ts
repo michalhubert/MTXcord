@@ -9,7 +9,8 @@ import {
 } from '@/lib/db'
 import { useFakeMediamtx } from '../helpers/msw'
 import { nextRequest } from '../helpers/request'
-import { asDiscord, asGuest, asStreamer, signedOut } from '../helpers/session'
+import { asDiscord, asGuest, asStreamer, asTrusted, signedOut } from '../helpers/session'
+import { trustNetworks } from '../helpers/trust'
 import { GUEST_IP, OTHER_IP, goLive, installFakeMediamtx, whep } from './_support'
 
 const rotate = (path?: string) =>
@@ -155,6 +156,19 @@ describe('POST /api/dock/password', () => {
       expect(isApproved('own', GUEST_IP, 'viewer')).toBe(true)
     })
 
+    it('keeps the approval of a guest on a trusted network, and drops other guests approvals', async () => {
+      useFakeMediamtx()
+      trustNetworks('10.250.0.0/16')
+      asStreamer()
+      approveAccess('cam', '10.250.0.5', 'viewer')
+      approveAccess('cam', GUEST_IP, 'viewer')
+
+      await rotate('cam')
+
+      expect(isApproved('cam', '10.250.0.5', 'viewer')).toBe(true)
+      expect(isApproved('cam', GUEST_IP, 'viewer')).toBe(false)
+    })
+
     it('rotating a path-specific password leaves other paths\' approvals', async () => {
       useFakeMediamtx()
       asStreamer()
@@ -212,6 +226,45 @@ describe('POST /api/dock/password', () => {
       await rotate('unrelated')
 
       expect(fake.kicks()).toHaveLength(0)
+    })
+
+    it('keeps trusted-network sessions connected and kicks password guests, whatever their IP', async () => {
+      const fake = installFakeMediamtx()
+      goLive(fake, 'cam')
+      trustNetworks('10.250.0.0/16')
+      asTrusted()
+      approveAccess('cam', '10.250.0.5', 'viewer')
+      const trustedId = (await whep('cam', '10.250.0.5')).id!
+      asGuest(rotateViewerPassword('default'))
+      approveAccess('cam', GUEST_IP, 'viewer')
+      const guestId = (await whep('cam', GUEST_IP)).id!
+      // A password guest who happens to sit on a trusted IP: the session is stale after
+      // rotation, so it must be kicked even though the IP is trusted.
+      approveAccess('cam', '10.250.0.6', 'viewer')
+      const trustedIpGuestId = (await whep('cam', '10.250.0.6')).id!
+      asStreamer()
+
+      await rotate()
+
+      expect(fake.kickedIds().sort()).toEqual([guestId, trustedIpGuestId].sort())
+      expect(fake.kickedIds()).not.toContain(trustedId)
+      asTrusted()
+      expect((await whep('cam', '10.250.0.5')).res.status).toBe(201)
+    })
+
+    it('kicks a trusted-network session whose IP is no longer trusted', async () => {
+      const fake = installFakeMediamtx()
+      goLive(fake, 'cam')
+      trustNetworks('10.250.0.0/16')
+      asTrusted()
+      approveAccess('cam', '10.250.0.5', 'viewer')
+      const trustedId = (await whep('cam', '10.250.0.5')).id!
+      trustNetworks('192.168.0.0/16')
+      asStreamer()
+
+      await rotate()
+
+      expect(fake.kickedIds()).toEqual([trustedId])
     })
 
     it('never kicks Discord viewers or the streamer', async () => {

@@ -1,4 +1,14 @@
-import { expect, goLive, loginAsStreamer, test, uniquePath } from './fixtures'
+import {
+  dockRow,
+  expect,
+  goLive,
+  ipPattern,
+  loginAsGuest,
+  loginAsStreamer,
+  rotatePassword,
+  test,
+  uniquePath,
+} from './fixtures'
 import { STREAMER_PASSWORD } from './env'
 
 test.describe('streamer dock', () => {
@@ -31,5 +41,38 @@ test.describe('streamer dock', () => {
     await page.getByRole('button', { name: 'Rotate the viewer password for this stream' }).click()
     // The dock picks the new password up with its next snapshot.
     await expect(page.getByText(/^[0-9a-f]{32}$/)).toBeVisible()
+  })
+
+  test('lists pending requests above connected viewers in one searchable list', async ({
+    client,
+  }) => {
+    const path = uniquePath()
+    await goLive(path)
+    const streamer = await client()
+    const viewer = await client()
+    const waiting = await client()
+    await loginAsStreamer(streamer.page)
+    const password = await rotatePassword(streamer.page, path)
+
+    const page = streamer.page
+    // The stream is private: the first guest is approved and watches, the second keeps waiting.
+    await loginAsGuest(viewer.page, path, password)
+    await dockRow(page, ipPattern(viewer.ip), 'Approve')
+      .getByRole('button', { name: 'Approve', exact: true })
+      .click()
+    await expect(viewer.page).toHaveURL(new RegExp(`/${path}$`))
+    const viewerRow = dockRow(page, ipPattern(viewer.ip), 'Kick this viewer')
+    await expect(viewerRow).toBeVisible()
+
+    await loginAsGuest(waiting.page, path, password)
+    const pendingRow = dockRow(page, ipPattern(waiting.ip), 'Approve')
+    await expect(pendingRow).toBeVisible()
+
+    const pendingBox = await pendingRow.boundingBox()
+    const viewerBox = await viewerRow.boundingBox()
+    expect(pendingBox!.y).toBeLessThan(viewerBox!.y)
+
+    await expect(page.getByText('1 pending')).toBeVisible()
+    await expect(page.getByPlaceholder('Search name, Discord or IP')).toHaveCount(1)
   })
 })

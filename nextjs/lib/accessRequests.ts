@@ -13,6 +13,7 @@ import {
 } from './db'
 import { clearBlock, denyViewer } from './accessBlocks'
 import { ALL_PATHS, notifyChanged } from './events'
+import { isTrustedIp } from './trustedNetworks'
 
 export type PendingRequest = {
   ip: string
@@ -154,9 +155,17 @@ export function usesPasswordOf(path: string, rotatedPath: string): boolean {
   )
 }
 
+// Approvals are keyed by IP, not by how the guest signed in. Anyone on a TRUSTED_NETWORKS IP
+// can sign in without the password anyway, so dropping their approval would only make
+// trusted guests ask again; and an approval grants nothing without a valid session, so a
+// password guest on a trusted IP who is kicked by the rotation keeps no access through it.
 export function clearApprovedPasswordViewers(rotatedPath: string): void {
   for (const a of listApprovedViewers()) {
-    if (a.role !== 'discord' && usesPasswordOf(a.path, rotatedPath)) {
+    if (
+      a.role !== 'discord' &&
+      !isTrustedIp(a.ip) &&
+      usesPasswordOf(a.path, rotatedPath)
+    ) {
       deleteApproval(a.path, a.ip, a.role)
     }
   }

@@ -4,6 +4,8 @@ export type ViewerIdentity = {
   role?: string;
   ip?: string;
   discordId?: string | null;
+  // Signed in through TRUSTED_NETWORKS rather than the viewer password.
+  trusted?: boolean;
   path?: string;
   addedAt: number;
 };
