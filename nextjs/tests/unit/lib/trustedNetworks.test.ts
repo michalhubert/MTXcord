@@ -205,37 +205,14 @@ describe('isTrustedIp', () => {
   })
 })
 
-describe('CLIENT_IP_HEADER guard', () => {
-  // The "logged once" flag is module state, so each test gets a fresh module.
-  async function load() {
-    vi.resetModules()
-    return (await import('@/lib/trustedNetworks')).isTrustedIp
-  }
-
-  it('trusts nobody without an explicit CLIENT_IP_HEADER, and logs why once', async () => {
-    const isTrusted = await load()
-    vi.stubEnv('TRUSTED_NETWORKS', '10.0.0.0/8')
+describe('CLIENT_IP_HEADER', () => {
+  it('works with the default header (unset) and with a custom one', () => {
+    trustNetworks('10.0.0.0/8')
     vi.stubEnv('CLIENT_IP_HEADER', '')
-    expect(isTrusted('10.1.2.3')).toBe(false)
-    expect(isTrusted('10.1.2.4')).toBe(false)
-    expect(errors).toHaveBeenCalledTimes(1)
-    expect(errors).toHaveBeenCalledWith(expect.stringContaining('CLIENT_IP_HEADER'))
-  })
-
-  it('works once CLIENT_IP_HEADER is set, without logging', async () => {
-    const isTrusted = await load()
-    vi.stubEnv('TRUSTED_NETWORKS', '10.0.0.0/8')
+    expect(isTrustedIp('10.1.2.3')).toBe(true)
     vi.stubEnv('CLIENT_IP_HEADER', 'cf-connecting-ip')
-    expect(isTrusted('10.1.2.3')).toBe(true)
-    expect(isTrusted('11.1.2.3')).toBe(false)
-    expect(errors).not.toHaveBeenCalled()
-  })
-
-  it('stays quiet when TRUSTED_NETWORKS is not configured at all', async () => {
-    const isTrusted = await load()
-    vi.stubEnv('TRUSTED_NETWORKS', '')
-    vi.stubEnv('CLIENT_IP_HEADER', '')
-    expect(isTrusted('10.1.2.3')).toBe(false)
+    expect(isTrustedIp('10.1.2.3')).toBe(true)
+    expect(isTrustedIp('11.1.2.3')).toBe(false)
     expect(errors).not.toHaveBeenCalled()
   })
 })

@@ -57,9 +57,8 @@ services:
       # Checked on MediaMTX's stream hook; must match the mtxcord-media service
       HOOK_SECRET: ${HOOK_SECRET:-${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET}}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-}
-      # Header your reverse proxy puts the client's IP in, e.g. cf-connecting-ip (see README). Empty means x-forwarded-for,
-      # and TRUSTED_NETWORKS is ignored until this is set.
-      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-}
+      # Header your reverse proxy puts the client's IP in, e.g. cf-connecting-ip (see README)
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-x-forwarded-for}
       TRUSTED_NETWORKS: ${TRUSTED_NETWORKS:-}
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
       # Optional per-path webhook overrides, e.g. "desktop:https://discord.com/...,gaming:https://discord.com/..."

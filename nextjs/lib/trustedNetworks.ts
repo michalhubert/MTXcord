@@ -1,7 +1,6 @@
 // Networks (TRUSTED_NETWORKS) whose clients may join without the viewer password.
 // Uses node:net, so it must stay out of the Edge runtime (proxy.ts, lib/auth.config.ts).
 import { BlockList, isIP } from 'node:net'
-import { clientIpHeaderConfigured } from './net'
 
 export type TrustedNetworks = {
   v4: BlockList
@@ -94,27 +93,9 @@ function configuredNetworks(): TrustedNetworks {
   return cache.networks
 }
 
-let warnedNoHeader = false
-
-// TRUSTED_NETWORKS only means something when the IP comes from a header the reverse proxy
-// controls. Without an explicit CLIENT_IP_HEADER the app falls back to x-forwarded-for,
-// which a client can fake when no proxy is in front, so nobody is trusted then.
-function clientIpHeaderIsConfigured(): boolean {
-  if (clientIpHeaderConfigured()) return true
-  if (!warnedNoHeader) {
-    warnedNoHeader = true
-    console.error(
-      'TRUSTED_NETWORKS is ignored until CLIENT_IP_HEADER is set explicitly: ' +
-        'x-forwarded-for behind a single trusted proxy, or the header your proxy overwrites ' +
-        '(e.g. cf-connecting-ip). Otherwise clients could fake a trusted IP.',
-    )
-  }
-  return false
-}
-
 export function isTrustedIp(ip: string): boolean {
   if (!ip || ip === 'unknown') return false
   const networks = configuredNetworks()
-  if (networks.count === 0 || !clientIpHeaderIsConfigured()) return false
+  if (networks.count === 0) return false
   return matchesNetworks(ip, networks)
 }

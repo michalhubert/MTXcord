@@ -94,12 +94,6 @@ describe('isSessionRevoked: trusted-network session', () => {
     vi.stubEnv('TRUSTED_NETWORKS', '')
     expect(revoked(trusted(), 'live', TRUSTED_IP)).toBe(true)
   })
-
-  it('is revoked when CLIENT_IP_HEADER is not set explicitly', () => {
-    vi.stubEnv('CLIENT_IP_HEADER', '')
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(revoked(trusted(), 'live', TRUSTED_IP)).toBe(true)
-  })
 })
 
 describe('isSessionRevoked: no stream path (login page)', () => {

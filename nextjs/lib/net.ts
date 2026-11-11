@@ -9,11 +9,6 @@ function clientIpHeader(): string {
   return (process.env.CLIENT_IP_HEADER || DEFAULT_HEADER).toLowerCase();
 }
 
-/** True when CLIENT_IP_HEADER is set explicitly, i.e. the operator chose the header. */
-export function clientIpHeaderConfigured(): boolean {
-  return !!process.env.CLIENT_IP_HEADER;
-}
-
 export function getClientIp(req: { headers: Headers }): string {
   const header = clientIpHeader();
   const value = req.headers.get(header);

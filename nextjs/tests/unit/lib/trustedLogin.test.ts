@@ -79,10 +79,4 @@ describe('trustedLogin', () => {
   it('keeps a valid trusted session', () => {
     expect(decide({ user: trustedSession })).toEqual(NOT_OFFERED)
   })
-
-  it('does not auto sign in without CLIENT_IP_HEADER, as nobody is trusted then', () => {
-    vi.stubEnv('CLIENT_IP_HEADER', '')
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(decide()).toEqual(NOT_OFFERED)
-  })
 })
