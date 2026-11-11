@@ -188,4 +188,4 @@ npm run test:watch
 
 For the e2e tests, install the browser once with `npx playwright install chromium`, then run `npm run test:e2e`. It builds the app first and uses ports 3100 and 18889.
 
-CI runs the unit and integration tests on every push and pull request, and the `mtxcord-web` image is only built when they pass. The e2e tests are local-only.
+CI runs the type check and the unit and integration tests on every push and pull request. Pull requests also get a `next build`, but no Docker image. The `mtxcord-web` image is only built and pushed from master and version tags, once the tests pass. The e2e tests are local-only.

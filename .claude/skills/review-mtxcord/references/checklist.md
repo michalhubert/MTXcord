@@ -108,6 +108,7 @@ The app gates everything in front of MediaMTX, so these invariants are what keep
   - New test or dev-only files must be excluded from the image in `nextjs/.dockerignore`.
   - `build-web` in `.github/workflows/docker-build.yml` must keep depending on `test-web`.
   - CI runs the type check plus unit and integration tests, never e2e.
+  - On pull requests CI runs `next build` (in `.github/workflows/test.yml`) instead of building the Docker image. A change that only breaks the image, e.g. to the Dockerfile, `.dockerignore` or a native dependency, therefore shows up only on master. For such changes, run `docker build ./nextjs` locally before merging.
 - **Dependencies:**
   - Keep `react` and `react-dom` exact-pinned to the same version.
   - `eslint` stays on 9 and `typescript` on 6 until `eslint-config-next` supports newer majors.

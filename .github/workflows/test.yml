@@ -40,3 +40,9 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
+
+      # PRs don't build the Docker image, so check the production build here.
+      # On master/tags the image build runs next build itself.
+      - name: Build
+        if: github.event_name != 'push'
+        run: npm run build
