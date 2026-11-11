@@ -1,0 +1,12 @@
+schema_version: "1.1"
+name: flags-module-level-registry
+expected_outcome: |
+  The cooldown is stored in a module-level Map in nextjs/lib/guestIdentity.ts
+  instead of on globalThis like the file's other registries, so route bundles
+  and dev HMR can each get their own copy and the cooldown isn't reliably
+  shared. The Map isn't reset in nextjs/tests/helpers/state.ts
+  resetServerState(), so its state leaks between tests, and the tests work
+  around that instead of fixing it. It is never pruned, either. The review
+  flags the registry pattern and the missing reset.
+context:
+  scaffold_script: place-files.sh

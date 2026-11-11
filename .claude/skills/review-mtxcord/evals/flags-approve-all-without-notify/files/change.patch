@@ -1,0 +1,184 @@
+diff --git a/nextjs/app/api/streams/pending/approve-all/route.ts b/nextjs/app/api/streams/pending/approve-all/route.ts
+new file mode 100644
+index 0000000..ad7af20
+--- /dev/null
++++ b/nextjs/app/api/streams/pending/approve-all/route.ts
+@@ -0,0 +1,24 @@
++import { isStreamerAuthorized } from '@/lib/authz'
++import { approveAllPending } from '@/lib/accessRequests'
++import { PATH_NAME_RE } from '@/lib/streamSettings'
++import { NextRequest } from 'next/server'
++
++export async function POST(req: NextRequest) {
++  if (!(await isStreamerAuthorized())) {
++    return new Response('Unauthorized', { status: 401 })
++  }
++
++  let body: unknown
++  try {
++    body = await req.json()
++  } catch {
++    return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
++  }
++
++  const { path } = (body ?? {}) as { path?: unknown }
++  if (typeof path !== 'string' || !PATH_NAME_RE.test(path)) {
++    return Response.json({ error: 'Invalid path' }, { status: 400 })
++  }
++
++  return Response.json({ approved: approveAllPending(path) })
++}
+diff --git a/nextjs/lib/accessRequests.ts b/nextjs/lib/accessRequests.ts
+index fa43176..cf54bd7 100644
+--- a/nextjs/lib/accessRequests.ts
++++ b/nextjs/lib/accessRequests.ts
+@@ -134,6 +134,18 @@ export function listPendingRequests(): PendingRequest[] {
+   }))
+ }
+ 
++// Lets in everyone currently waiting on `path`; returns how many were approved.
++export function approveAllPending(path: string): number {
++  const waiting = listAccessRequests(Date.now() - STALE_MS).filter(
++    (r) => r.path === path,
++  )
++  for (const r of waiting) {
++    approveViewer(path, r.ip, r.role)
++    deleteAccessRequest(path, r.ip, r.role)
++  }
++  return waiting.length
++}
++
+ export function clearApprovedViewers(path: string): void {
+   deleteApprovalsForPath(path)
+   notifyChanged(path)
+diff --git a/nextjs/tests/integration/streams-pending-approve-all.test.ts b/nextjs/tests/integration/streams-pending-approve-all.test.ts
+new file mode 100644
+index 0000000..efbb3ee
+--- /dev/null
++++ b/nextjs/tests/integration/streams-pending-approve-all.test.ts
+@@ -0,0 +1,125 @@
++import { describe, expect, it } from 'vitest'
++import { POST as approveAllPost } from '@/app/api/streams/pending/approve-all/route'
++import {
++  isApproved,
++  listPendingRequests,
++  openAccessRequest,
++  type AccessRequester,
++} from '@/lib/accessRequests'
++import { nextRequest } from '../helpers/request'
++import { asDiscord, asGuest, asStreamer, signedOut } from '../helpers/session'
++import { GUEST_IP, OTHER_IP } from './_support'
++
++const approveAll = (body: unknown) =>
++  approveAllPost(nextRequest('/api/streams/pending/approve-all', { json: body }))
++
++const guestRequest = (ip = GUEST_IP, path = 'cam'): AccessRequester => ({
++  path,
++  ip,
++  role: 'viewer',
++  name: null,
++  image: null,
++  discordId: null,
++  clientIp: ip,
++})
++const discordRequest = (id = '42', path = 'cam'): AccessRequester => ({
++  path,
++  ip: `discord:${id}`,
++  role: 'discord',
++  name: 'Luna',
++  image: null,
++  discordId: id,
++  clientIp: GUEST_IP,
++})
++
++describe('POST /api/streams/pending/approve-all', () => {
++  it.each([
++    ['signed out', () => signedOut()],
++    ['a guest', () => asGuest('pw')],
++    ['a Discord viewer', () => asDiscord('42', 'Luna')],
++  ])('401 for %s, and nothing changes', async (_label, signIn) => {
++    signIn()
++    openAccessRequest(guestRequest())
++
++    const res = await approveAll({ path: 'cam' })
++
++    expect(res.status).toBe(401)
++    expect(listPendingRequests()).toHaveLength(1)
++    expect(isApproved('cam', GUEST_IP, 'viewer')).toBe(false)
++  })
++
++  it('400 "Invalid JSON body" when the body is not JSON', async () => {
++    asStreamer()
++    const res = await approveAllPost(
++      nextRequest('/api/streams/pending/approve-all', {
++        method: 'POST',
++        body: 'nope',
++      }),
++    )
++    expect(res.status).toBe(400)
++    expect(await res.json()).toEqual({ error: 'Invalid JSON body' })
++  })
++
++  it.each([
++    ['an empty object', {}],
++    ['a null body', null],
++    ['an empty path', { path: '' }],
++    ['a non-string path', { path: 5 }],
++    ['a path with a dash', { path: 'my-cam' }],
++  ])('400 "Invalid path" for %s', async (_label, body) => {
++    asStreamer()
++    openAccessRequest(guestRequest())
++
++    const res = await approveAll(body)
++
++    expect(res.status).toBe(400)
++    expect(await res.json()).toEqual({ error: 'Invalid path' })
++    expect(listPendingRequests()).toHaveLength(1)
++  })
++
++  it('approves everyone waiting on that path and returns the count', async () => {
++    asStreamer()
++    openAccessRequest(guestRequest(GUEST_IP))
++    openAccessRequest(guestRequest(OTHER_IP))
++
++    const res = await approveAll({ path: 'cam' })
++
++    expect(res.status).toBe(200)
++    expect(await res.json()).toEqual({ approved: 2 })
++    expect(isApproved('cam', GUEST_IP, 'viewer')).toBe(true)
++    expect(isApproved('cam', OTHER_IP, 'viewer')).toBe(true)
++    expect(listPendingRequests()).toEqual([])
++  })
++
++  it('approves Discord viewers by account too', async () => {
++    asStreamer()
++    openAccessRequest(guestRequest())
++    openAccessRequest(discordRequest('42'))
++
++    const res = await approveAll({ path: 'cam' })
++
++    expect(await res.json()).toEqual({ approved: 2 })
++    expect(isApproved('cam', 'discord:42', 'discord')).toBe(true)
++    expect(isApproved('cam', GUEST_IP, 'viewer')).toBe(true)
++  })
++
++  it('leaves requests on other paths alone', async () => {
++    asStreamer()
++    openAccessRequest(guestRequest(GUEST_IP, 'cam'))
++    openAccessRequest(guestRequest(GUEST_IP, 'other'))
++
++    await approveAll({ path: 'cam' })
++
++    expect(isApproved('other', GUEST_IP, 'viewer')).toBe(false)
++    expect(listPendingRequests().map((r) => r.path)).toEqual(['other'])
++  })
++
++  it('approves nobody when no one is waiting', async () => {
++    asStreamer()
++
++    const res = await approveAll({ path: 'cam' })
++
++    expect(res.status).toBe(200)
++    expect(await res.json()).toEqual({ approved: 0 })
++  })
++})

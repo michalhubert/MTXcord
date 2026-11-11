@@ -1,0 +1,13 @@
+schema_version: "1.1"
+name: flags-approve-all-without-notify
+expected_outcome: |
+  The new approveAllPending() in nextjs/lib/accessRequests.ts approves and
+  deletes each pending request through the db-level helpers, without calling
+  notifyChanged(). Viewers on the waiting screen (gate SSE) and the dock are
+  therefore not pushed the change: approved viewers stay on the waiting screen
+  until some unrelated change or poll. The review flags this and suggests
+  calling notifyChanged(path) once, or reusing approveAccess(). Access control
+  is correct (/api/streams/pending is a dock prefix and the handler checks
+  isStreamerAuthorized), and the review should not claim otherwise.
+context:
+  scaffold_script: place-files.sh

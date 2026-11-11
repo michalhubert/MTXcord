@@ -1,0 +1,17 @@
+diff --git a/nextjs/app/api/streams/reset/route.ts b/nextjs/app/api/streams/reset/route.ts
+new file mode 100644
+index 0000000..d6103ac
+--- /dev/null
++++ b/nextjs/app/api/streams/reset/route.ts
+@@ -0,0 +1,11 @@
++import { clearApprovedViewers, clearPendingRequests } from '@/lib/accessRequests'
++import { NextRequest } from 'next/server'
++
++// Lets the streamer start over from the dock: drops every approval and pending
++// request for a path, so everyone has to ask again.
++export async function POST(req: NextRequest) {
++  const path = req.nextUrl.searchParams.get('path') || 'default'
++  clearApprovedViewers(path)
++  clearPendingRequests(path)
++  return Response.json({ ok: true, path })
++}
