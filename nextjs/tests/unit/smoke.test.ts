@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getPathVisibility, setPathVisibility } from '@/lib/db'
+import { allowUnhandledRequests } from '../helpers/msw'
 import { resetServerState } from '../helpers/state'
 
 describe('harness smoke (unit)', () => {
@@ -19,6 +20,8 @@ describe('harness smoke (unit)', () => {
   })
 
   it('blocks requests no handler declared', async () => {
+    allowUnhandledRequests()
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     // example.com resolves, so a rejection here comes from MSW, not from DNS.
     const failure = await fetch('http://example.com/anything').then(
       () => null,
@@ -26,5 +29,8 @@ describe('harness smoke (unit)', () => {
     )
     expect(failure).toBeInstanceOf(TypeError)
     expect(String(failure?.cause)).toMatch(/\[MSW\]/)
+    expect(logged.mock.calls.flat().join(' ')).toContain(
+      'intercepted a request without a matching request handler',
+    )
   })
 })

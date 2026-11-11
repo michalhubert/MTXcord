@@ -36,9 +36,11 @@ describe('GET /api/dock/events', () => {
     it('streams for the streamer', async () => {
       useFakeMediamtx()
       asStreamer()
-      const { res } = await connect()
+      const { res, sse } = await connect()
       expect(res.status).toBe(200)
       expect(res.headers.get('content-type')).toContain('text/event-stream')
+      // Wait for the first snapshot, so its MediaMTX calls don't outlive the test.
+      await sse.waitFor((e) => e.type === 'snapshot')
     })
 
     it('streams without a session when DISABLE_DOCK_AUTH is true', async () => {
