@@ -10,4 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Project rules
 
-See the repository's [AGENTS.md](../AGENTS.md). In short: every change must include tests or test changes (unit, integration, or e2e for critical paths, all under `tests/`), and a bug fix needs a regression test. Run `npm test`, `npx tsc --noEmit` and `npm run lint` before finishing.
+See the repository's [AGENTS.md](../AGENTS.md). In short:
+
+* Every change must include tests or test changes: unit, integration, or e2e for critical paths, all under `tests/`. A bug fix needs a regression test.
+* After adding or changing code, run the suite here (`npm test`, `npx tsc --noEmit`, `npm run lint`, plus `npm run test:e2e` for critical paths). Fix failures before reporting the work as done, and say what you ran.
