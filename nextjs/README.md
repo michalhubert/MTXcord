@@ -22,11 +22,13 @@ Set these in the `.env` next to `docker-compose.yaml`. Variables shared with the
 | `DISABLE_DOCK_AUTH`       | Set to `true` to skip authentication on `/dock` and `/stream`. **Everyone who can reach the app then has full streamer control**, so only use it when the app isn't reachable from the internet |
 | `DENIAL_TIMEOUTS`         | Comma-separated minutes a kicked or denied viewer is kept out, growing with each repeat kick or denial within an hour; the last value repeats (default `1,5,15`) |
 | `GUEST_AVATAR_FILTER_ID`  | Derpibooru filter used for guest avatars (optional, defaults to Derpibooru's default filter), see [Guest names and avatars](#guest-names-and-avatars) |
+| `GUEST_AVATAR_BOORU_URL`  | Base URL of the Derpibooru API used for guest avatars (optional, default `https://derpibooru.org`; any Philomena-based booru works) |
 | `GUEST_AVATAR_TAGS`       | Extra Derpibooru tags every guest avatar must have (optional), see [Guest names and avatars](#guest-names-and-avatars) |
 | `GUEST_PONY_NAMES_FILE`   | File with guest pony names replacing the built-in list (optional), see [Custom pony names](#custom-pony-names) |
 | `MEDIAMTX_HOST`           | Hostname/IP of the media server the WHEP/API proxy talks to (default `mtxcord-media`) |
 | `MEDIAMTX_PORT`           | Port of the media server's WebRTC signaling (default `8889`) |
 | `MEDIAMTX_API_PORT`       | Port of the media server's MediaMTX control API, used by `/dock` (default `9997`) |
+| `MTXCORD_DB_PATH`         | Overrides the SQLite database path (default `/data/sqlite/mtxcord.db`; meant for tests and running outside Docker, where the default resolves to the current drive's root) |
 
 ## Viewer access
 
@@ -51,7 +53,7 @@ A guest keeps the same pony for the whole stream, including across page refreshe
 
 Each guest also gets an avatar: a solo picture of their namesake, looked up through the [Derpibooru API](https://derpibooru.org/pages/api). Images are hotlinked from Derpibooru's CDN. Nothing is downloaded; only each guest's chosen image URL is saved with their identity.
 
-Searches use Derpibooru's default filter. To use a different one, set `GUEST_AVATAR_FILTER_ID` to the ID of any [Derpibooru filter](https://derpibooru.org/filters) (the number in the filter's URL).
+Searches go to `https://derpibooru.org` unless `GUEST_AVATAR_BOORU_URL` points at another Philomena-based booru. They use Derpibooru's default filter. To use a different one, set `GUEST_AVATAR_FILTER_ID` to the ID of any [Derpibooru filter](https://derpibooru.org/filters) (the number in the filter's URL).
 
 `GUEST_AVATAR_TAGS` narrows avatars down further: a comma-separated list of [Derpibooru tags](https://derpibooru.org/tags) every avatar must also have. Prefix a tag with `-` to exclude it instead. For example:
 
@@ -164,6 +166,26 @@ All of this state lives in the web app's memory and SQLite database, so run a si
 
 ## Database
 
-Viewer passwords, stream visibility, pending requests, approvals, kick/deny timeouts, guest identities, Discord message ids and saved `/stream` settings are stored in a small SQLite database, always at the fixed path `/data/sqlite/mtxcord.db`. Mount `/data` as a volume (already done in the provided `docker-compose.yaml`, mapped to `./config`, so the database ends up in `config/sqlite`) to persist it across restarts.
+Viewer passwords, stream visibility, pending requests, approvals, kick/deny timeouts, guest identities, Discord message ids and saved `/stream` settings are stored in a small SQLite database, at `/data/sqlite/mtxcord.db` (override with `MTXCORD_DB_PATH`, which is only meant for tests and running outside Docker). Mount `/data` as a volume (already done in the provided `docker-compose.yaml`, mapped to `./config`, so the database ends up in `config/sqlite`) to persist it across restarts.
 
 A database from before the rename (`discordmtx.db`) is deleted on startup and not migrated; to keep its data, stop the stack and rename it (and any `-wal`/`-shm` files next to it) to `config/sqlite/mtxcord.db` before starting the new version.
+
+## Tests
+
+Requires Node 26. Run everything from the `nextjs/` folder. There are three layers:
+
+* **Unit** (`tests/unit`): the `lib` modules and pure client helpers.
+* **Integration** (`tests/integration`): the API route handlers against an in-memory SQLite database, with MediaMTX, Discord and Derpibooru faked.
+* **E2E** (`tests/e2e`): [Playwright](https://playwright.dev) on Chromium against a production build and a fake MediaMTX. Covers the critical paths: streamer login and password rotation, guest approval and denial, kicks, the stream going online and offline, and access guards.
+
+```bash
+npm ci
+npm test                  # unit + integration
+npm run test:unit
+npm run test:integration
+npm run test:watch
+```
+
+For the e2e tests, install the browser once with `npx playwright install chromium`, then run `npm run test:e2e`. It builds the app first and uses ports 3100 and 18889.
+
+CI runs the unit and integration tests on every push and pull request, and the `mtxcord-web` image is only built when they pass. The e2e tests are local-only.

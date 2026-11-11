@@ -3,3 +3,10 @@ node_modules
 .git
 *.md
 .dockerignore
+tests
+vitest.config.mts
+playwright.config.ts
+test-results
+playwright-report
+blob-report
+coverage

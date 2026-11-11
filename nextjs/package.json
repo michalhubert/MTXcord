@@ -5,7 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
@@ -14,27 +20,30 @@
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^9.5.0",
     "@mui/material-nextjs": "^9.5.0",
-    "@tanstack/react-virtual": "^3.14.21",
-    "better-sqlite3": "^11.8.1",
-    "lucide-react": "^1.47.0",
-    "motion": "^13.4.1",
-    "next": "^16.4.2",
+    "@tanstack/react-virtual": "^3.14.26",
+    "better-sqlite3": "^13.0.3",
+    "lucide-react": "^1.71.0",
+    "motion": "^14.12.0",
+    "next": "^16.4.6",
     "next-auth": "^5.0.0-beta.32",
     "node-vibrant": "^4.0.4",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "zustand": "^5.0.15"
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zustand": "^5.1.0"
   },
   "devDependencies": {
     "@emnapi/core": "^1.11.3",
     "@emnapi/runtime": "^1.11.3",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^20",
+    "@playwright/test": "^1.65.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.4.2",
-    "prettier": "3.9.8",
-    "typescript": "^5"
+    "eslint-config-next": "^16.4.6",
+    "msw": "^3.0.4",
+    "prettier": "3.9.10",
+    "typescript": "^6.0.0",
+    "vitest": "^5.1.0"
   }
 }

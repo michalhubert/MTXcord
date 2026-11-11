@@ -25,6 +25,14 @@ const eslintConfig = defineConfig([
             "react/no-unescaped-entities": "warn",
         },
     },
+
+    {
+        // Playwright fixtures call use(), which the hooks rule mistakes for React's use().
+        files: ["tests/e2e/**"],
+        rules: {
+            "react-hooks/rules-of-hooks": "off",
+        },
+    },
 ]);
 
 export default eslintConfig;

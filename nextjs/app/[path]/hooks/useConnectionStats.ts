@@ -24,7 +24,7 @@ export type ConnectionStats = {
   droppedFramesPct: number
 }
 
-type Sample = {
+export type Sample = {
   at: number
   packetsReceived: number
   packetsLost: number
@@ -53,7 +53,7 @@ const STALL_AFTER_MS = 3000
 const SHOW_AFTER = 2
 const CLEAR_AFTER = 4
 
-async function takeSample(pc: RTCPeerConnection): Promise<Sample> {
+export async function takeSample(pc: RTCPeerConnection): Promise<Sample> {
   const report = await pc.getStats()
   const sample: Sample = {
     at: performance.now(),
@@ -95,7 +95,7 @@ async function takeSample(pc: RTCPeerConnection): Promise<Sample> {
   return sample
 }
 
-function evaluate(
+export function evaluate(
   window: Sample[],
   stalledForMs: number,
 ): { stats: ConnectionStats; warnings: ConnectionWarning[] } {
@@ -103,12 +103,12 @@ function evaluate(
   const last = window[window.length - 1]
   const seconds = Math.max((last.at - first.at) / 1000, 0.001)
 
-  const received = last.packetsReceived - first.packetsReceived
+  const received = Math.max(last.packetsReceived - first.packetsReceived, 0)
   const lost = Math.max(last.packetsLost - first.packetsLost, 0)
   const packetLossPct =
     received + lost > 0 ? (lost / (received + lost)) * 100 : 0
 
-  const decoded = last.framesDecoded - first.framesDecoded
+  const decoded = Math.max(last.framesDecoded - first.framesDecoded, 0)
   const dropped = Math.max(last.framesDropped - first.framesDropped, 0)
   const droppedFramesPct =
     decoded + dropped > 0 ? (dropped / (decoded + dropped)) * 100 : 0
@@ -118,7 +118,9 @@ function evaluate(
     rttMs: last.rttMs,
     jitterMs: last.jitterMs,
     bitrateKbps:
-      ((last.bytesReceived - first.bytesReceived) * 8) / 1000 / seconds,
+      (Math.max(last.bytesReceived - first.bytesReceived, 0) * 8) /
+      1000 /
+      seconds,
     fps: last.fps,
     droppedFramesPct,
   }
@@ -170,7 +172,7 @@ function evaluate(
   return { stats, warnings }
 }
 
-function qualityOf(warnings: ConnectionWarning[]): ConnectionQuality {
+export function qualityOf(warnings: ConnectionWarning[]): ConnectionQuality {
   if (warnings.some((w) => w.severity === 'critical')) return 'poor'
   return warnings.length > 0 ? 'fair' : 'good'
 }

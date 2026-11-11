@@ -115,6 +115,8 @@ docker compose up -d --build
 
 It reads the same environment variables via a `.env` file placed in the `dev/` directory.
 
+To run the web app's tests, see the [Tests section](nextjs/README.md#tests) of its README.
+
 ## Project structure
 
 ```text

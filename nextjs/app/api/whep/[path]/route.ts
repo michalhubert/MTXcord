@@ -37,14 +37,20 @@ export async function POST(
   const upstream = `${mediamtxWebrtcBase()}/${path}/whep`
 
   const body = await req.text()
-  const res = await fetch(upstream, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/sdp',
-      Authorization: mediamtxAuthHeader(),
-    },
-    body,
-  })
+  let res: Response
+  try {
+    res = await fetch(upstream, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/sdp',
+        Authorization: mediamtxAuthHeader(),
+      },
+      body,
+    })
+  } catch (err) {
+    console.error('WHEP upstream fetch failed:', err)
+    return new Response('Media server unreachable', { status: 502 })
+  }
 
   const responseHeaders = forwardSdpHeaders(res)
 

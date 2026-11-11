@@ -9,7 +9,7 @@ import { DEFAULT_STREAM_SETTINGS, type StreamSettings } from './streamSettings'
 export * from './streamSettings'
 export type PathVisibility = 'public' | 'private'
 
-const DB_PATH = '/data/sqlite/mtxcord.db'
+const DEFAULT_DB_PATH = '/data/sqlite/mtxcord.db'
 // Pre-rename (DiscordMTX) databases; not migrated, only cleaned up.
 const OLD_DB_PATHS = ['/data/sqlite/discordmtx.db', '/data/discordmtx.db']
 
@@ -30,15 +30,27 @@ function removeOldDbs(): void {
 
 let db: Database.Database | null = null
 
+// Closes the connection; the next call reopens it (a fresh schema for ':memory:').
+export function closeDb(): void {
+  db?.close()
+  db = null
+}
+
 function getDb(): Database.Database {
   if (db) return db
 
-  try {
-    mkdirSync(dirname(DB_PATH), { recursive: true })
-  } catch {}
-  removeOldDbs()
+  // MTXCORD_DB_PATH is for tests (':memory:' or a temp file); the default
+  // location is the container's /data volume.
+  const override = process.env.MTXCORD_DB_PATH
+  const dbPath = override || DEFAULT_DB_PATH
+  if (dbPath !== ':memory:') {
+    try {
+      mkdirSync(dirname(dbPath), { recursive: true })
+    } catch {}
+  }
+  if (!override) removeOldDbs()
 
-  db = new Database(DB_PATH)
+  db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON') // needed for ON DELETE CASCADE to actually run
   db.exec(`
