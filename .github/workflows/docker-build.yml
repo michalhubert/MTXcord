@@ -34,6 +34,7 @@ jobs:
           filters: |
             workflow:
               - '.github/workflows/docker-build.yml'
+              - '.github/workflows/test.yml'
             mediamtx:
               - 'mediamtx/**'
               - '!mediamtx/paths.yml.example'
@@ -90,9 +91,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # 3. Build web app
-  build-web:
+  # 3. Test web app
+  test-web:
     needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.nextjs == 'true' ||
+      needs.detect-changes.outputs.workflow == 'true' ||
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test.yml
+
+  # 4. Build web app
+  build-web:
+    needs: [detect-changes, test-web]
     if: |
       needs.detect-changes.outputs.nextjs == 'true' ||
       needs.detect-changes.outputs.workflow == 'true' || 

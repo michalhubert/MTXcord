@@ -12,7 +12,13 @@ import {
 } from './db'
 import { PONY_NAMES } from './ponyNames'
 
-const DERPIBOORU_SEARCH = 'https://derpibooru.org/api/v1/json/search/images'
+// Any Philomena-based booru works; read at call time so tests can redirect it.
+function booruSearchUrl(): string {
+  const base = (
+    process.env.GUEST_AVATAR_BOORU_URL || 'https://derpibooru.org'
+  ).replace(/\/+$/, '')
+  return `${base}/api/v1/json/search/images`
+}
 const POOL_SIZE = 20
 // More than one, so there's still a pick when the first is the current picture.
 const REROLL_BATCH_SIZE = 3
@@ -152,7 +158,7 @@ async function fetchPool(
 
   try {
     await waitForRequestSlot()
-    const res = await fetch(`${DERPIBOORU_SEARCH}?${params}`, {
+    const res = await fetch(`${booruSearchUrl()}?${params}`, {
       headers: {
         Accept: 'application/json',
         'User-Agent': 'MTXcord guest avatars',

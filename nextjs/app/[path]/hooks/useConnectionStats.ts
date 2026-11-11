@@ -24,7 +24,7 @@ export type ConnectionStats = {
   droppedFramesPct: number
 }
 
-type Sample = {
+export type Sample = {
   at: number
   packetsReceived: number
   packetsLost: number
@@ -53,7 +53,7 @@ const STALL_AFTER_MS = 3000
 const SHOW_AFTER = 2
 const CLEAR_AFTER = 4
 
-async function takeSample(pc: RTCPeerConnection): Promise<Sample> {
+export async function takeSample(pc: RTCPeerConnection): Promise<Sample> {
   const report = await pc.getStats()
   const sample: Sample = {
     at: performance.now(),
@@ -95,7 +95,7 @@ async function takeSample(pc: RTCPeerConnection): Promise<Sample> {
   return sample
 }
 
-function evaluate(
+export function evaluate(
   window: Sample[],
   stalledForMs: number,
 ): { stats: ConnectionStats; warnings: ConnectionWarning[] } {
@@ -170,7 +170,7 @@ function evaluate(
   return { stats, warnings }
 }
 
-function qualityOf(warnings: ConnectionWarning[]): ConnectionQuality {
+export function qualityOf(warnings: ConnectionWarning[]): ConnectionQuality {
   if (warnings.some((w) => w.severity === 'critical')) return 'poor'
   return warnings.length > 0 ? 'fair' : 'good'
 }
