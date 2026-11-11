@@ -1,5 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Node has neither window nor localStorage, and zustand's persist reads
+// window.localStorage when the store module is created (hence vi.hoisted). Without
+// it, persist warns on every set. Plain assignment, because unstubGlobals would
+// drop a stubGlobal after the first test.
+vi.hoisted(() => {
+  const data = new Map<string, string>()
+  const storage = {
+    getItem: (k: string) => data.get(k) ?? null,
+    setItem: (k: string, v: string) => void data.set(k, String(v)),
+    removeItem: (k: string) => void data.delete(k),
+    clear: () => data.clear(),
+    key: (i: number) => [...data.keys()][i] ?? null,
+    get length() {
+      return data.size
+    },
+  }
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: storage,
+  })
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: storage },
+  })
+})
+
 vi.mock('next/navigation', () => ({ usePathname: vi.fn(() => '/') }))
 
 import { followsAvatar, resolveAccent, useThemeStore } from '@/lib/themeStore'

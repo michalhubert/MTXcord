@@ -36,6 +36,6 @@ CI runs only the type check and the unit and integration tests, and the `mtxcord
 Test conventions:
 
 * Reuse the shared harness instead of hand-rolling mocks. `tests/helpers/` has sessions, requests, SSE, clock and MSW fakes for MediaMTX, Discord and Derpibooru. The stateful MediaMTX fake is `tests/fakes/mediamtx.ts`.
-* Tests never reach the real network (MSW errors on unhandled requests) and never write outside temp directories. The database is `:memory:` via `MTXCORD_DB_PATH`.
+* Tests never reach the real network and never write outside temp directories. A request no MSW handler matched fails the test (call `allowUnhandledRequests()` from `tests/helpers/msw.ts` if that is intended). Integration tests get a default Derpibooru fake, since guest avatar lookups are incidental; install your own `useFakeDerpibooru()` to assert on it. The database is `:memory:` via `MTXCORD_DB_PATH`.
 * For fake time use `useFakeClock()`. It never fakes `setImmediate`, which the change hub (`lib/events.ts`) relies on.
 * Close or abort every SSE stream a test opens.

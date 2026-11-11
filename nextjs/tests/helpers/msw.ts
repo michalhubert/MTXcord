@@ -9,6 +9,35 @@ import { createFakeMediamtx, type FakeMediamtx } from '../fakes/mediamtx'
 
 export const server = setupServer()
 
+// Unhandled-request guard (wired up in tests/setup/common.ts). Every request no
+// handler matched is recorded here; afterEach fails the test unless it opted
+// out with allowUnhandledRequests().
+let unhandled: string[] = []
+let unhandledAllowed = false
+
+// The 'error' strategy (set in common.ts) still rejects the request; this only
+// records it. (A custom onUnhandledFrame callback can't reject it: MSW 3 ignores
+// defaults.error() and swallows thrown errors.)
+server.events.on('request:unhandled', ({ request }) => {
+  unhandled.push(`${request.method} ${request.url}`)
+})
+
+/**
+ * For a test that fires a request with no handler on purpose: it still errors
+ * (the request fails), but no longer fails the test. Spy console.error too, MSW prints each one.
+ */
+export function allowUnhandledRequests(): void {
+  unhandledAllowed = true
+}
+
+/** Returns what the guard saw in this test (empty if opted out) and resets it. */
+export function takeUnhandledRequests(): string[] {
+  const seen = unhandledAllowed ? [] : unhandled
+  unhandled = []
+  unhandledAllowed = false
+  return seen
+}
+
 /**
  * Routes MediaMTX's API (:MEDIAMTX_API_PORT) and WebRTC (:MEDIAMTX_PORT) ports
  * on MEDIAMTX_HOST to a fake. While fake.setDown(true), requests fail with a
@@ -91,7 +120,11 @@ export type FakeBooru = {
   /** Search URLs received (query string included), oldest first. */
   requests: URL[]
   /** Overrides what the booru answers from now on. */
-  respondWith(opts: { urls?: string[]; status?: number; retryAfterS?: number }): void
+  respondWith(opts: {
+    urls?: string[]
+    status?: number
+    retryAfterS?: number
+  }): void
 }
 
 /**
