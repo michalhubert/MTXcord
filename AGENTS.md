@@ -31,7 +31,7 @@ npm run lint
 * Report what you ran and the result. If you couldn't run something (no `node_modules`, a port in use, no browser installed), say so plainly instead of implying it passed.
 * Docs-only changes don't need the suite.
 
-CI runs only the type check and the unit and integration tests, and the `mtxcord-web` image is built only when they pass. E2E is local-only, so running it is on you.
+CI runs the type check and the unit and integration tests, plus `next build` on pull requests. The `mtxcord-web` image is only built and pushed from master and version tags, after the tests pass. E2E is local-only, so running it is on you.
 
 Test conventions:
 
