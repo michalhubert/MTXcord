@@ -273,6 +273,25 @@ describe('POST /api/whep/[path]', () => {
     })
   })
 
+  describe('MediaMTX unreachable', () => {
+    it('answers 502 and remembers no identity', async () => {
+      const fake = useFakeMediamtx()
+      goLive(fake, 'cam')
+      asDiscord('42', 'Luna')
+      setPathVisibility('cam', 'public')
+      fake.setDown(true)
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const { res, id } = await whep('cam')
+
+      expect(res.status).toBe(502)
+      expect(await res.text()).toBe('Media server unreachable')
+      expect(id).toBeNull()
+      expect(error).toHaveBeenCalled()
+      expect(fake.sessions()).toHaveLength(0)
+    })
+  })
+
   describe('remembering the viewer identity', () => {
     it('stores a guest by IP address', async () => {
       const fake = useFakeMediamtx()

@@ -88,6 +88,19 @@ describe('POST /api/whip/[path]', () => {
     expect(res.headers.get('content-type')).toBe('text/plain')
   })
 
+  it('answers 502 when MediaMTX cannot be reached', async () => {
+    const fake = useFakeMediamtx()
+    fake.setDown(true)
+    asStreamer()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = await publish('cam')
+
+    expect(res.status).toBe(502)
+    expect(await res.text()).toBe('Media server unreachable')
+    expect(error).toHaveBeenCalled()
+  })
+
   it('does not create a stream session itself (that comes from the MediaMTX hook)', async () => {
     useFakeMediamtx()
     asStreamer()

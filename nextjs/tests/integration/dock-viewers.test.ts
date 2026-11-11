@@ -183,13 +183,32 @@ describe('DELETE /api/dock/viewers (kick)', () => {
     expect(getBlock('cam', { role: 'viewer', ip: GUEST_IP })).toBeNull()
   })
 
-  it('answers 502 when MediaMTX is down', async () => {
+  it('answers 502 when MediaMTX is down, without blocking the viewer', async () => {
     const { fake, id } = await guestWatching()
     fake.setDown(true)
 
     const res = await kick(id)
 
     expect(res.status).toBe(502)
+    expect(getBlock('cam', { role: 'viewer', ip: GUEST_IP })).toBeNull()
+    fake.setDown(false)
+    asGuest(rotateViewerPassword('default'))
+    expect((await whep('cam', GUEST_IP)).res.status).toBe(201)
+  })
+
+  it('keeps the approval intact when the MediaMTX kick fails', async () => {
+    const fake = useFakeMediamtx()
+    goLive(fake, 'cam')
+    asGuest(rotateViewerPassword('default'))
+    approveAccess('cam', GUEST_IP, 'viewer')
+    const { id } = await whep('cam', GUEST_IP)
+    asStreamer()
+    fake.setDown(true)
+
+    expect((await kick(id!)).status).toBe(502)
+
+    expect(isApproved('cam', GUEST_IP, 'viewer')).toBe(true)
+    expect(getBlock('cam', { role: 'viewer', ip: GUEST_IP })).toBeNull()
   })
 
   it('allows an unauthenticated caller when DISABLE_DOCK_AUTH is true', async () => {

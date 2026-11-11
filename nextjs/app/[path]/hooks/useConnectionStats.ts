@@ -103,12 +103,12 @@ export function evaluate(
   const last = window[window.length - 1]
   const seconds = Math.max((last.at - first.at) / 1000, 0.001)
 
-  const received = last.packetsReceived - first.packetsReceived
+  const received = Math.max(last.packetsReceived - first.packetsReceived, 0)
   const lost = Math.max(last.packetsLost - first.packetsLost, 0)
   const packetLossPct =
     received + lost > 0 ? (lost / (received + lost)) * 100 : 0
 
-  const decoded = last.framesDecoded - first.framesDecoded
+  const decoded = Math.max(last.framesDecoded - first.framesDecoded, 0)
   const dropped = Math.max(last.framesDropped - first.framesDropped, 0)
   const droppedFramesPct =
     decoded + dropped > 0 ? (dropped / (decoded + dropped)) * 100 : 0
@@ -118,7 +118,9 @@ export function evaluate(
     rttMs: last.rttMs,
     jitterMs: last.jitterMs,
     bitrateKbps:
-      ((last.bytesReceived - first.bytesReceived) * 8) / 1000 / seconds,
+      (Math.max(last.bytesReceived - first.bytesReceived, 0) * 8) /
+      1000 /
+      seconds,
     fps: last.fps,
     droppedFramesPct,
   }

@@ -25,14 +25,20 @@ export async function POST(
   // The stream session starts with MediaMTX's online hook.
 
   const body = await req.text()
-  const res = await fetch(upstream, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/sdp',
-      Authorization: mediamtxAuthHeader(),
-    },
-    body,
-  })
+  let res: Response
+  try {
+    res = await fetch(upstream, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/sdp',
+        Authorization: mediamtxAuthHeader(),
+      },
+      body,
+    })
+  } catch (err) {
+    console.error('WHIP upstream fetch failed:', err)
+    return new Response('Media server unreachable', { status: 502 })
+  }
 
   return new Response(await res.text(), {
     status: res.status,

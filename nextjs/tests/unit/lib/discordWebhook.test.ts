@@ -131,6 +131,17 @@ describe('message lifecycle', () => {
     expect(embed?.description).toContain('**live** just went live!')
   })
 
+  it('announces going live without a link when PLAYER_DOMAIN is unset', async () => {
+    const fake = useConfiguredWebhook()
+    vi.stubEnv('PLAYER_DOMAIN', '')
+    await syncDiscordWebhookMessage('live', true)
+    const embed = fake.posts()[0].body.embeds?.[0]
+    expect(embed?.title).toBe('🔴 Stream is LIVE')
+    expect(embed?.description).toBe('**live** just went live!')
+    expect(embed?.description).not.toContain('offline')
+    expect(embed?.description).not.toContain('http')
+  })
+
   it('survives a failing webhook without storing an id', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     server.use(

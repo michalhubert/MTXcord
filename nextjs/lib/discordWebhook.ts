@@ -34,8 +34,10 @@ function buildEmbed(path: string, online: boolean) {
   const playerUrl = buildPlayerUrl(path);
   return {
     title: online ? "🔴 Stream is LIVE" : "⚫ Stream ended",
-    description: online && playerUrl
-      ? `**${path}** just went live!\n[Watch now](${playerUrl})`
+    description: online
+      ? playerUrl
+        ? `**${path}** just went live!\n[Watch now](${playerUrl})`
+        : `**${path}** just went live!`
       : `**${path}** is currently offline.`,
     color: online ? COLOR_ONLINE : COLOR_OFFLINE,
     timestamp: new Date().toISOString(),

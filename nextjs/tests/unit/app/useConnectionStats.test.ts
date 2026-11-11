@@ -278,6 +278,39 @@ describe('evaluate', () => {
       expect(warnings).toEqual([])
     })
 
+    it('clamps bitrate at 0 after a bytes counter reset', () => {
+      const { stats } = evaluate(
+        [sample(0, { bytesReceived: 5_000_000 }), sample(1000, { bytesReceived: 1000 })],
+        0,
+      )
+      expect(stats.bitrateKbps).toBe(0)
+    })
+
+    it('keeps loss and dropped-frame percentages within 0-100 when received/decoded reset', () => {
+      // Unclamped, received = -995 and lost = 10 would not give a sane ratio
+      // (and received = -5 would give 200%).
+      const { stats } = evaluate(
+        [
+          sample(0, { packetsReceived: 1000, framesDecoded: 500 }),
+          sample(1000, { packetsReceived: 995, packetsLost: 10, framesDecoded: 497, framesDropped: 30 }),
+        ],
+        0,
+      )
+      expect(stats.packetLossPct).toBe(100)
+      expect(stats.droppedFramesPct).toBe(100)
+
+      const quiet = evaluate(
+        [
+          sample(0, { packetsReceived: 1000, framesDecoded: 500 }),
+          sample(1000, { packetsReceived: 10, framesDecoded: 5 }),
+        ],
+        0,
+      )
+      expect(quiet.stats.packetLossPct).toBe(0)
+      expect(quiet.stats.droppedFramesPct).toBe(0)
+      expect(quiet.warnings).toEqual([])
+    })
+
     it('does not raise a freeze warning when the counter went down', () => {
       const { warnings } = evaluate([sample(0, { freezeCount: 5 }), sample(1000, { freezeCount: 0 })], 0)
       expect(warnings).toEqual([])

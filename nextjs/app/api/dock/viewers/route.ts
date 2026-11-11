@@ -17,7 +17,16 @@ export async function DELETE(req: NextRequest) {
     return new Response('Missing session ID', { status: 400 })
   }
 
-  // Otherwise the player's auto-reconnect would undo the kick.
+  const kicked = await kickWebrtcSession(sessionId)
+  if (!kicked) {
+    return Response.json(
+      { error: 'MediaMTX API unreachable or session not found' },
+      { status: 502 },
+    )
+  }
+
+  // Block right after the kick succeeded (synchronously, before the player's
+  // reconnect backoff can retry). Otherwise its auto-reconnect would undo the kick.
   const identity = getViewerIdentity(sessionId)
   if (identity?.ip && identity.path) {
     kickViewer(identity.path, identity)
@@ -25,14 +34,6 @@ export async function DELETE(req: NextRequest) {
       identity.path,
       approvalKey(identity.role, identity.ip, identity.discordId),
       identity.role,
-    )
-  }
-
-  const kicked = await kickWebrtcSession(sessionId)
-  if (!kicked) {
-    return Response.json(
-      { error: 'MediaMTX API unreachable or session not found' },
-      { status: 502 },
     )
   }
 
