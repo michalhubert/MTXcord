@@ -37,6 +37,17 @@ export function asGuest(password: string): TestSession | null {
   })
 }
 
+/** Viewer signed in through TRUSTED_NETWORKS: no password, flagged `trusted`. */
+export function asTrusted(): TestSession | null {
+  return setSession({
+    id: 'viewer',
+    role: 'viewer',
+    name: null,
+    image: null,
+    trusted: true,
+  })
+}
+
 /** Discord-signed-in viewer. */
 export function asDiscord(
   id: string,

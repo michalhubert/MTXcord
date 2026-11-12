@@ -5,6 +5,7 @@ import Credentials from "next-auth/providers/credentials";
 import { authConfig } from "./auth.config";
 import { safeEqual, throttledLogin } from "./credentials";
 import { getClientIp } from "./net";
+import { isTrustedIp } from "./trustedNetworks";
 
 export const config: NextAuthConfig = {
   ...authConfig,
@@ -48,6 +49,18 @@ export const config: NextAuthConfig = {
       },
     }),
 
+    // Clients on TRUSTED_NETWORKS join without the viewer password. They are still
+    // ordinary guests: private streams need the streamer's approval.
+    Credentials({
+      id: "trusted-network",
+      name: "Trusted Network",
+      credentials: {},
+      async authorize(_credentials, request) {
+        if (!isTrustedIp(getClientIp(request))) return null;
+        return { id: "viewer", name: "Viewer", role: "viewer", trusted: true };
+      },
+    }),
+
     // Static admin/streamer password, used to access the OBS streamer dock (/dock)
     Credentials({
       id: "streamer-password",
@@ -74,12 +87,14 @@ export const config: NextAuthConfig = {
       if (!token) return token;
       const password = (params.user as { password?: string } | undefined)?.password;
       if (password) token.password = password;
+      if ((params.user as { trusted?: boolean } | undefined)?.trusted) token.trusted = true;
       return token;
     },
     async session(params) {
       const session = await authConfig.callbacks!.session!(params);
       if (session.user) {
         (session.user as { password?: string }).password = params.token.password as string | undefined;
+        (session.user as { trusted?: boolean }).trusted = params.token.trusted as boolean | undefined;
       }
       return session;
     },

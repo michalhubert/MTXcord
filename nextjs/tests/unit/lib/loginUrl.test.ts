@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loginUrlFor, sameSitePath, streamPathOf } from '@/lib/loginUrl'
+import { loginUrlFor, sameSitePath, streamPathOf, withManualLogin } from '@/lib/loginUrl'
 
 describe('sameSitePath', () => {
   it.each([null, ''])('falls back for %j', (input) => {
@@ -42,5 +42,22 @@ describe('streamPathOf', () => {
 describe('loginUrlFor', () => {
   it('encodes the callback url', () => {
     expect(loginUrlFor('room')).toBe('/login?callbackUrl=%2Froom')
+  })
+})
+
+describe('withManualLogin', () => {
+  it('adds manual=1 and keeps the callbackUrl', () => {
+    expect(withManualLogin('/login?callbackUrl=%2Flive')).toBe('/login?callbackUrl=%2Flive&manual=1')
+  })
+
+  it('works without a query and replaces an existing manual', () => {
+    expect(withManualLogin('/login')).toBe('/login?manual=1')
+    expect(withManualLogin('/login?manual=0&callbackUrl=%2Flive')).toBe(
+      '/login?manual=1&callbackUrl=%2Flive',
+    )
+  })
+
+  it('never leaves the site', () => {
+    expect(withManualLogin('https://evil.com/login?x=1')).toBe('/login?x=1&manual=1')
   })
 })

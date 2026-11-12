@@ -13,7 +13,8 @@ Set these in the `.env` next to `docker-compose.yaml`. Variables shared with the
 | `NEXTAUTH_SECRET`         | Required. Random secret used to sign session cookies; anyone who knows it can sign in as the streamer. Generate one with `openssl rand -hex 32` |
 | `NEXTAUTH_URL`            | Public URL of the web app                          |
 | `NEXTJS_PORT`             | Host port the web app is published on (default `8080`) |
-| `CLIENT_IP_HEADER`        | Header the reverse proxy puts the client's IP in (default `x-forwarded-for`), see [Client IPs](#client-ips) |
+| `CLIENT_IP_HEADER`        | Header the reverse proxy puts the client's IP in (default `x-forwarded-for`, which works behind a single proxy; change it only for a setup like Cloudflare in front of NGINX), see [Client IPs](#client-ips) |
+| `TRUSTED_NETWORKS`        | Comma-separated IPs and CIDR ranges (IPv4 and IPv6) whose viewers join without the viewer password (optional, e.g. `192.168.1.0/24`), see [Trusted networks](#trusted-networks) |
 | `DISCORD_WEBHOOK_URL`     | Default Discord webhook used for stream online/offline notifications, see [Discord webhooks](#discord-webhooks) |
 | `DISCORD_WEBHOOK_URLS`    | Optional per-path webhook overrides, see [Discord webhooks](#discord-webhooks) |
 | `DISCORD_CLIENT_ID`       | Discord OAuth application client ID                |
@@ -44,6 +45,22 @@ Each stream is either:
 Kicked or denied viewers are kept out for a while, longer with each repeat (see `DENIAL_TIMEOUTS`), and see a countdown until they can try again. Approving them clears the timeout.
 
 The player URL posted to Discord never contains credentials - viewers sign in on the login page.
+
+### Trusted networks
+
+Viewers whose IP is in `TRUSTED_NETWORKS` don't need the viewer password: the login page signs them in automatically when they have no session (or one with an outdated viewer password), and offers a "Continue without password" button in those cases. Signing out sends them back with `manual=1`, so they aren't signed straight in again and can pick Discord instead. A signed-in Discord viewer or streamer is never replaced (the button isn't offered to them), and `/login?mode=streamer` ignores the setting. They're ordinary guests otherwise: they get a pony name, are approved by IP on private streams, and can be kicked or denied like any other guest. Rotating the password doesn't affect trusted sessions, and a trusted session stops working from an IP outside the list. A password guest on a trusted IP is affected: their connection is dropped and their password session becomes invalid, but the login page signs them straight back in by network and their IP-keyed approval stays, so they don't have to ask again. Invalid entries are logged and skipped.
+
+For example, to let the home network in without a password behind a single reverse proxy (NGINX, Caddy, Traefik, a Cloudflare Tunnel), add one line to `.env`; the default `CLIENT_IP_HEADER` already fits:
+
+```env
+TRUSTED_NETWORKS=192.168.1.0/24,10.0.0.5,fd00::/8
+```
+
+This trusts whatever IP the web app sees, so it's only as safe as your [Client IPs](#client-ips) setup:
+
+* With an unusual proxy chain, e.g. Cloudflare in front of NGINX, set `CLIENT_IP_HEADER` to the header the outer proxy sets (such as `cf-connecting-ip`), or the web app sees every viewer as the outer proxy.
+* Without a reverse proxy, clients can send any `X-Forwarded-For` they like and pose as a trusted IP. Don't use `TRUSTED_NETWORKS` on a web app reachable directly from the internet.
+* Never list a range a proxy or tunnel shares with outsiders, e.g. the proxy's own IP when all traffic arrives from it.
 
 ## Guest names and avatars
 
@@ -101,7 +118,7 @@ Guests (viewer password) can only be told apart by IP, so approvals, kicks and d
 * `x-forwarded-for` (default): the **last** entry is used, the one added by the proxy right in front of the web app. Works with a single proxy such as NGINX, Caddy, Traefik, Cloudflare or a Cloudflare Tunnel.
 * With several proxies, e.g. Cloudflare in front of NGINX, the last entry is the outer proxy's address. Use a header the outer proxy sets instead, such as `cf-connecting-ip`, and make sure the web app is only reachable through it, or clients can send that header themselves.
 
-Without a reverse proxy, clients can pick their own IP, so don't expose the web app directly.
+Without a reverse proxy, clients can pick their own IP, so don't expose the web app directly. This matters even more with [`TRUSTED_NETWORKS`](#trusted-networks), since a faked IP would skip the viewer password.
 
 ## Streamer HUD / OBS Custom Browser Dock
 
@@ -114,7 +131,7 @@ Features:
 * The current viewer password, with buttons to rotate and copy it
 * A public/private switch, and pending requests to approve or deny (see [Viewer access](#viewer-access))
 * Connected viewers with their IP address and stream path, a kick button and a 🎲 button that re-rolls a guest's pony picture
-* Pending requests and current viewers are virtualized, scrollable lists with a search box (matches the viewer's name, Discord account, or IP)
+* Pending requests and current viewers share one virtualized, scrollable list (pending requests first, with an amber edge) and one search box (matches the viewer's name, Discord account, or IP)
 * Activity log of recent viewer connections and disconnections, opened in a popup from the header's log button
 * Optional audio chime synthesized via Web Audio API on viewer join
 * The header shows the live stream's path. When several paths are live at once (e.g. OBS on `desktop` and the browser panel on `browser`), it becomes a dropdown with each stream's viewer and pending counts, and the password, public/private switch, pending requests, viewers and activity below all follow the picked stream. Join/leave chimes still play for every stream

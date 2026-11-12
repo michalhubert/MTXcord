@@ -19,6 +19,7 @@ import { getBlock } from '@/lib/accessBlocks'
 import { ALL_PATHS, onChanged } from '@/lib/events'
 import { approveViewer, setViewerPassword } from '@/lib/db'
 import { flushNotifications, useFakeClock } from '../../helpers/clock'
+import { trustNetworks } from '../../helpers/trust'
 
 const guest = (over: Partial<AccessRequester> = {}): AccessRequester => ({
   path: 'live',
@@ -253,6 +254,15 @@ describe('clearApprovedPasswordViewers', () => {
 
     await flushNotifications()
     expect(listener.mock.calls[0][0].has(ALL_PATHS)).toBe(true)
+  })
+
+  it('keeps approvals of guests on trusted networks', () => {
+    trustNetworks('10.0.0.0/8')
+    approveViewer('a', '10.1.2.3', 'viewer')
+    approveViewer('a', '1.1.1.1', 'viewer')
+    clearApprovedPasswordViewers('a')
+    expect(isApproved('a', '10.1.2.3', 'viewer')).toBe(true)
+    expect(isApproved('a', '1.1.1.1', 'viewer')).toBe(false)
   })
 
   it('rotating the default also clears paths that inherit it', () => {

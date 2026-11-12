@@ -24,6 +24,7 @@ const env = {
   GUEST_AVATAR_FILTER_ID: '',
   GUEST_AVATAR_BOORU_URL: '',
   CLIENT_IP_HEADER: '',
+  TRUSTED_NETWORKS: '',
 }
 
 export default defineConfig({

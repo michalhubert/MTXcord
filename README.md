@@ -100,7 +100,7 @@ These are read by both services:
 
 The web app handles authentication (Discord OAuth, per-stream viewer password and streamer password) and the WHEP signaling proxy, but not TLS.
 
-For a public deployment, put it behind a TLS-enabled reverse proxy such as Caddy, Traefik, or Cloudflare, and set `CLIENT_IP_HEADER` to match it (see [Client IPs](nextjs/README.md#client-ips)).
+For a public deployment, put it behind a TLS-enabled reverse proxy such as Caddy, Traefik, or Cloudflare, and set `CLIENT_IP_HEADER` to match it if it isn't a single proxy (the default `x-forwarded-for` fits NGINX, Caddy, Traefik and Cloudflare Tunnels, see [Client IPs](nextjs/README.md#client-ips)). To let your home network watch without the viewer password, set [`TRUSTED_NETWORKS`](nextjs/README.md#trusted-networks).
 
 Keep in mind that HTTPS proxying and WebRTC are separate connections. Cloudflare can proxy the HTTP/HTTPS side normally, while WebRTC still needs its UDP path to be reachable (see [`WEBRTC_ADDITIONAL_HOSTS`](mediamtx/README.md#webrtc_additional_hosts)).
 

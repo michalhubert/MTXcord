@@ -59,6 +59,7 @@ services:
       NEXTAUTH_URL: ${NEXTAUTH_URL:-}
       # Header your reverse proxy puts the client's IP in, e.g. cf-connecting-ip (see README)
       CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-x-forwarded-for}
+      TRUSTED_NETWORKS: ${TRUSTED_NETWORKS:-}
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
       # Optional per-path webhook overrides, e.g. "desktop:https://discord.com/...,gaming:https://discord.com/..."
       DISCORD_WEBHOOK_URLS: ${DISCORD_WEBHOOK_URLS:-}
